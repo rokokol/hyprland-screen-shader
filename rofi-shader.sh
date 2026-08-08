@@ -2,13 +2,9 @@
 
 set -euo pipefail
 
-# Outside rofi it's a launcher: run rofi with this same script as the "shader" modi.
-# -display-shader is passed here rather than left to the user's rofi config, so the
-# picker looks right without touching anything else
+# Outside rofi it's a launcher: run rofi with this same script as the "shader" modi
 if [[ -z "${ROFI_RETV:-}" ]]; then
-  exec rofi -show shader -modi "shader:$0" \
-    -display-shader "${ROFI_SHADER_PROMPT:-📺}" \
-    -mesg "Full-screen effect"
+  exec rofi -show shader -modi "shader:$0" -mesg "Full-screen effect"
 fi
 
 # Resolve through symlinks so a link on PATH still finds its neighbour
@@ -33,6 +29,10 @@ fi
 # cursor would jump to the top. With the option the position is kept, so you can
 # click effects/brightness in a row without scrolling again (rofi >= 1.7)
 printf '\0keep-selection\x1ftrue\n'
+# The mode name, set through the script protocol. NOT -display-shader: rofi registers
+# that option only for its built-in modes, so for a script modi it is silently ignored
+# and the raw mode name shows instead. This way nothing has to be declared in rofi.rasi
+printf '\0prompt\x1f%s\n' "${ROFI_SHADER_PROMPT:-📺}"
 # The current soft-brightness level goes into the message above the list, updated on every click
 printf '\0message\x1fFull-screen effect · brightness %s%%\n' "$("$SS" bright get)"
 

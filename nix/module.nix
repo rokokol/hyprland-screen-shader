@@ -47,8 +47,8 @@ in
       default = null;
       example = "🎬";
       description = ''
-        What rofi shows as the mode name (`-display-shader`). The picker passes it
-        itself, so nothing has to be declared in the rofi config
+        What rofi shows as the mode name. The picker sets it through the script
+        protocol, so nothing has to be declared in the rofi config
       '';
     };
 

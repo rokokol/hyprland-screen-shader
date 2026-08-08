@@ -92,6 +92,20 @@ has "an active effect is marked with its apply number" "$menu" "01. 📺 CRT|crt
 has "the number follows stack order, not menu order" "$menu" "02. ⚫ Grayscale|grayscale"
 hasnt "Normal is never marked" "$(run menu)" "01. 🌈"
 
+# ── the rofi picker ──────────────────────────────────────────────────────────────
+section "picker"
+# NUL and the 0x1f separator are turned into @ and | so the assertions stay readable
+picker_out() { ROFI_RETV=0 SCREEN_SHADER="$SS" bash "$here/../rofi-shader.sh" | tr '\000\037' '@|'; }
+state ""
+out="$(picker_out)"
+has "the mode name is set through the script protocol" "$out" "@prompt|📺"
+has "the selection is kept, so effects can be clicked in a row" "$out" "@keep-selection|true"
+has "the current brightness rides in the message" "$out" "brightness 100%"
+has "an effect carries its name in a hidden info field" "$out" "Grayscale@info|grayscale"
+has "the brightness buttons follow Normal" "$out" "@info|__bright_up__"
+out="$(ROFI_SHADER_PROMPT=X picker_out)"
+has "and the mode name is overridable" "$out" "@prompt|X"
+
 # ── the waybar indicator ─────────────────────────────────────────────────────────
 section "status"
 state "" "1.00"

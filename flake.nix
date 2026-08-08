@@ -67,6 +67,7 @@
                 export HOME=$PWD
                 mkdir -p repo
                 cp ${manager} repo/screen-shader.sh
+                cp ${picker} repo/rofi-shader.sh
                 cp -r ${shaderDir} repo/shaders
                 cp -r ${testsDir} repo/tests
                 chmod -R +w repo
@@ -137,7 +138,8 @@
                 screen-shader menu | grep -xF '🌈 Normal|none' >/dev/null
                 screen-shader help | grep SCREEN_SHADER_DIR >/dev/null
                 screen-shader status | grep '"class":"off"' >/dev/null
-                grep -q 'display-shader' ${picker}
+                # The picker must name its own rofi mode, without anything in rofi.rasi
+                ROFI_RETV=0 rofi-shader | tr '\000\037' '@|' | grep -F '@prompt|📺' >/dev/null
                 touch $out
               '';
 
