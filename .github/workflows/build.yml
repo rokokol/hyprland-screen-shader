@@ -1,0 +1,34 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix build --no-write-lock-file .#screen-shader
+      # tests, shaders-compile, shaders-metadata, package-smoke, module-wiring, scripts-lint
+      - run: nix flake check --no-write-lock-file
+      # The scripts must stay usable without Nix: install.sh puts them behind symlinks,
+      # and they have to find their own effects through those
+      - name: install.sh works
+        run: |
+          PREFIX=$PWD/out ./install.sh
+          test -L out/bin/screen-shader
+          out/bin/screen-shader menu | grep -xF '⚫ Grayscale|grayscale' >/dev/null
+          SCREEN_SHADER=$PWD/out/bin/screen-shader ./tests/run.sh
+      - run: nix fmt -- --ci
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - run: nix run nixpkgs#shellcheck -- install.sh screen-shader.sh rofi-shader.sh tests/run.sh
+      - run: nix run nixpkgs#shfmt -- -d -i 2 -ci install.sh screen-shader.sh rofi-shader.sh tests/run.sh
