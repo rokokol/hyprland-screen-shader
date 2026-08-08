@@ -2,7 +2,7 @@
 
 # Полноэкранные шейдеры для Hyprland
 
-**Стопка эффектов и софтверная яркость** 　٩(◕‿◕)۶
+**Стопка эффектов и софтверная яркость** |･ω･｀)
 
 ![Hyprland](https://img.shields.io/badge/Hyprland-58E1FF?style=flat&logo=hyprland&logoColor=black)
 ![GLSL](https://img.shields.io/badge/GLSL-ES_3.0-5586A4?style=flat&logo=opengl&logoColor=white)

@@ -2,7 +2,7 @@
 
 # Screen shader for Hyprland
 
-**Stacking full-screen effects and software brightness** 　٩(◕‿◕)۶
+**Stacking full-screen effects and software brightness** |･ω･｀)
 
 ![Hyprland](https://img.shields.io/badge/Hyprland-58E1FF?style=flat&logo=hyprland&logoColor=black)
 ![GLSL](https://img.shields.io/badge/GLSL-ES_3.0-5586A4?style=flat&logo=opengl&logoColor=white)

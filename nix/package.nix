@@ -39,7 +39,9 @@ let
   };
 
   # Left empty when unset, so the script's own default stays the single source of it
-  promptArg = lib.optionalString (rofiPrompt != null) ''--set-default ROFI_SHADER_PROMPT "${rofiPrompt}"'';
+  promptArg = lib.optionalString (
+    rofiPrompt != null
+  ) ''--set-default ROFI_SHADER_PROMPT "${rofiPrompt}"'';
   signalArg = lib.optionalString (
     waybarSignal != null
   ) ''--set-default WAYBAR_SHADER_SIGNAL "${toString waybarSignal}"'';
