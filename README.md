@@ -110,14 +110,16 @@ screen-shader menu                          # "<emoji> <label>|<name>" for the p
 
 The choice — the stack and the brightness — lives in `$XDG_STATE_HOME/screen-shader/state` and survives a reboot. Generated shaders are ephemeral, in `$XDG_RUNTIME_DIR/screen-shader`
 
-## Adding an effect
+## Adding your own effect
 
-Drop one file into the shader directory. Nothing else — no list to append to, no table to keep in sync:
+An effect is **one file** and nothing else — there is no list to append to and no table to keep in sync. Registration is the file landing in the shader directory; the manager rescans on every invocation.
+
+### What the file must contain
 
 ```glsl
-// label: Bloom
-// emoji: 🔆
-// order: 65
+// label: Bloom          <- what the picker shows
+// emoji: 🔆             <- shown next to it, and in the waybar indicator
+// order: 65             <- position in the menu and in effect next/prev
 
 vec3 effect(vec3 c, vec2 uv) {
     vec3 blur = texture(tex, uv + vec2(0.002)).rgb;
@@ -125,11 +127,54 @@ vec3 effect(vec3 c, vec2 uv) {
 }
 ```
 
-`c` is the pixel colour so far, `uv` runs 0..1, and `tex`, `time` (seconds) and `BRIGHTNESS` are in scope. Skip `#version`, `main` and the uniform declarations — the manager writes those. Helper names may collide between effects: when several are composed, the manager suffixes the later bodies (`hash` → `hash_1`)
+Two hard requirements:
 
-The header is the effect's entire contract with the picker: `label` and `emoji` are what you see, `order` is where it sits in the menu and in `next`/`prev`
+- **exactly one function `vec3 effect(vec3 c, vec2 uv)`**, returning the new colour. It is the entry point the manager calls
+- **the three header lines**, each a `//` comment with `key: value`. Miss them and the effect still works, but shows up at the bottom of the menu as 🎬 under its file name
 
-**Nothing declares how an effect renders — that is read off the code.** Use `time` and it is animated; sample `texture()` and it distorts geometry. The manager sets Hyprland's damage tracking accordingly:
+What you get for free — do **not** declare any of it yourself:
+
+| in scope | is |
+| --- | --- |
+| `c` | the colour so far: the screen, or the output of the previous effect in the stack |
+| `uv` | screen coordinates, 0..1 |
+| `tex` | the screen texture, for sampling somewhere other than `uv` |
+| `time` | seconds since start, float |
+| `BRIGHTNESS` | the current soft-brightness multiplier |
+
+Do not write `#version`, `precision`, `in`/`out`/`uniform` declarations or `main()` — the manager emits all of them, and a second copy is a compile error. Helper functions and constants at file scope are fine and may share names with other effects: when several are composed, the later bodies are renamed (`hash` → `hash_1`).
+
+The file name is the effect's name: `bloom.frag` gives `screen-shader effect push bloom`.
+
+### Where to put it
+
+| installed by | put it in |
+| --- | --- |
+| `install.sh` | `$PREFIX/share/screen-shader/shaders/` |
+| a clone | `shaders/` in the checkout |
+| Nix, one-off | `SCREEN_SHADER_DIR=~/my-shaders screen-shader effect set bloom` |
+| Nix, for good | `programs.screen-shader.extraShaders.bloom = ./bloom.frag;` |
+
+`extraShaders` merges into the shipped set, so a key that already exists **replaces** the shipped effect — that is also how you re-colour or re-order one of mine without forking.
+
+### Checking it works
+
+```sh
+screen-shader menu | grep bloom       # confirms the header was read as you meant it
+screen-shader effect set bloom        # applies it
+```
+
+A **name** you got wrong is caught loudly — the manager checks the file exists and says so. A **GLSL error is not**: Hyprland accepts a shader that fails to compile without a word (`hyprctl` answers `ok`, `getoption` reports it set, and nothing lands in `hyprland.log`), so the only symptom is the effect quietly not happening. Check it yourself:
+
+```sh
+glslangValidator -S frag "$XDG_RUNTIME_DIR"/screen-shader/active-*.frag
+```
+
+Working in a clone you get that for free: `nix flake check` compiles every effect, alone and composed with all the others, which is also the only way a name collision or a stray `main()` surfaces before you are staring at an unchanged screen.
+
+### The one thing you never declare: how it renders
+
+Hyprland has to be told how hard to redraw, and **that is read off your code**, not off the header:
 
 | | when | `damage_tracking` / `vfr` | why |
 | --- | --- | --- | --- |
@@ -137,13 +182,7 @@ The header is the effect's entire contract with the picker: `label` and `emoji` 
 | offset | the body calls `texture()` | `1` / `1` | offset sampling reads neighbouring areas, which precise damage has not drawn yet — redraw the whole monitor, but still sleep when idle |
 | plain | neither | `2` / `1` | per-pixel, partial damage is fine |
 
-Comments are stripped before that test, so prose about `time` doesn't make a static effect animated
-
-On Home Manager you don't have to fork the repo to add one:
-
-```nix
-programs.screen-shader.extraShaders.bloom = ./bloom.frag;
-```
+Comments are stripped before that test, so prose mentioning `time` will not make a static effect animated. Sampling `texture()` also puts the effect **first** in the chain, ahead of the colour filters — geometry happens once, colour grades the result.
 
 ## Waybar
 
