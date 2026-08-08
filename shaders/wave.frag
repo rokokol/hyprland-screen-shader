@@ -1,3 +1,6 @@
+// label: Wave
+// emoji: 🌊
+// order: 110
 // Animated "water" ripple: the screen sways gently over time.
 // Uses time -> Hyprland redraws the frame continuously
 vec3 effect(vec3 c, vec2 uv) {

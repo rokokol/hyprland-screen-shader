@@ -1,3 +1,6 @@
+// label: Matrix
+// emoji: 🟢
+// order: 90
 // "Matrix": the screen in dark green + falling digital rain.
 // Animated (uses time)
 float rnd(vec2 p) {

@@ -1,3 +1,6 @@
+// label: Grayscale
+// emoji: ⚫
+// order: 10
 // Grayscale (Rec. 709 luminance coefficients)
 vec3 effect(vec3 c, vec2 uv) {
     float g = dot(c, vec3(0.2126, 0.7152, 0.0722));

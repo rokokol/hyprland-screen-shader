@@ -1,3 +1,6 @@
+// label: CRT
+// emoji: 📺
+// order: 80
 // Retro CRT: tube curvature + shadow RGB mask + scanlines + vignette.
 // The curvature resamples the image along bowed coordinates, which makes the
 // straight edges of windows/text jaggy (that very artefact). So we SMOOTH the

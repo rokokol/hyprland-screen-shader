@@ -4,43 +4,48 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-screen-shader.sh — manager of Hyprland full-screen shaders and soft brightness
+screen-shader — Hyprland full-screen effects and software brightness
 
 Commands:
-  effect push <name>     ADD an effect to the stack (composited over the current ones)
-  effect set <name>      REPLACE the stack with a single effect
-  effect clear           clear the stack (turn all effects off)
-  effect toggle <name>   in the stack — remove it; not — add it
-  effect next|prev       replace the stack with the next/previous effect
-  bright up|down         soft brightness ±5% (clamp 10..200%)
-  bright reset           brightness 100%
-  bright toggle          100% ↔ 50%
-  bright set <0.10..2>   brightness exactly
-  bright get             current brightness in percent (integer, for the UI)
+  effect push <name>      ADD an effect to the stack (composited over the current ones)
+  effect set <name>       REPLACE the stack with a single effect
+  effect clear            clear the stack (turn all effects off)
+  effect toggle <name>    in the stack — remove it; not — add it
+  effect next|prev        replace the stack with the next/previous effect
+  bright up|down          soft brightness ±5% (clamp 10..200%)
+  bright reset            brightness 100%
+  bright toggle           100% ↔ 50%
+  bright set <0.10..2>    brightness exactly
+  bright get              current brightness in percent (integer, for the UI)
   flash [-k] <name> [sec] effect for N seconds (default 1.0), then revert;
-                         composited OVER the current stack (composition);
-                         durable state is not touched;
-                         -k — no-op if the stack is non-empty
-  restore                re-read state and apply again
-                         (exec on every Hyprland reload — the slot is runtime)
-  status                 JSON for waybar (custom/shader)
-  menu                   "<emoji> <label>|<name>" lines for the rofi picker
-                         (active ones marked with an apply number: 01. 02. 03.)
-  help                   this help
+                          composited OVER the current stack (composition);
+                          durable state is not touched;
+                          -k — no-op if the stack is non-empty
+  restore                 re-read state and apply again
+                          (exec on every Hyprland reload — the slot is runtime)
+  reset-all               drop effects and brightness in one apply
+  status                  JSON for a waybar custom module
+  menu                    "<emoji> <label>|<name>" lines for the rofi picker
+                          (active ones marked with an apply number: 01. 02. 03.)
+  help                    this help
 
 Effects STACK: every `effect push` adds a filter over the previous ones (the rofi
-picker sends exactly push), and they compose into one shader until the stack is
-cleared (`effect clear`, the "Normal" item in the picker, or SUPER+G). Hyprland has
-one shader slot (decoration:screen_shader), so all effects in the stack plus
-brightness are assembled into one generated GLSL. Effects that sample the texture
-with an offset (crt/wave/glitch) go first in the chain (geometry), color filters
-after; multiple geometric ones don't stack (the last overrides the previous ones)
-— a limitation of the single slot. Each effect in scripts/shaders/<name>.frag
-describes only the function vec3 effect(vec3 c, vec2 uv)
+picker sends `effect toggle`), and they compose into one shader until the stack is
+cleared (`effect clear`, or the "Normal" item in the picker). Hyprland has one shader
+slot (decoration:screen_shader), so all effects in the stack plus brightness are
+assembled into one generated GLSL. Effects that sample the texture with an offset
+(crt/wave/glitch) go first in the chain (geometry), colour filters after; multiple
+geometric ones don't stack (the last overrides the previous ones) — a limitation of
+the single slot
 
-The choice (effect stack + brightness) is stored durably in ~/.local/state/huix/shader
-— survives logout/reboot and isn't seen by the hourly sync; generated shaders are
-ephemeral and live in $XDG_RUNTIME_DIR/hypr-shader
+One effect is one file, $SCREEN_SHADER_DIR/<name>.frag, holding the function
+vec3 effect(vec3 c, vec2 uv) under a header of "// label:", "// emoji:", "// order:"
+
+Environment:
+  SCREEN_SHADER_DIR    where the .frag files live (default: shaders/ next to this script)
+  SCREEN_SHADER_STATE  durable state file (default: $XDG_STATE_HOME/screen-shader/state)
+  WAYBAR_SHADER_SIGNAL RT signal to poke waybar with after a change (unset = don't)
+  SHADER_NO_SIGNAL     set to any value to suppress that signal
 EOF
 }
 
@@ -55,7 +60,6 @@ notify_info() {
   command -v notify-send >/dev/null 2>&1 && notify-send -u low "$1" "$2" || true
 }
 
-# The SIGRTMIN+N number is set by Nix (waybar/shader.nix) via WAYBAR_SHADER_SIGNAL
 # SHADER_NO_SIGNAL suppresses the signal on restore at session start: the default
 # action of an RT signal is to kill the process, and waybar may not have installed
 # a handler yet
@@ -65,46 +69,57 @@ signal_waybar() {
   pkill -RTMIN+"$WAYBAR_SHADER_SIGNAL" waybar 2>/dev/null || true
 }
 
-require_env() {
-  if [[ -z "${HUIX:-}" ]]; then
-    notify_error "HUIX is not set"
+# Resolve through symlinks, so a link to this script on PATH still finds its shaders
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+SHADER_DIR="${SCREEN_SHADER_DIR:-$(dirname "$SELF")/shaders}"
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/screen-shader"
+STATE="${SCREEN_SHADER_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/screen-shader/state}"
+
+# Filled by load_effects from the .frag files themselves — there is no table here
+EFFECTS=()
+declare -A EMOJI LABEL ANIMATED SAMPLES
+
+# One awk pass over every .frag: the "// key: value" header gives the label, emoji and
+# menu position, and the code gives the render class. Comments are stripped before the
+# code is tested — crt.frag says "time is unused" in prose and must not read as animated
+load_effects() {
+  local name emoji label anim samp
+  while IFS='|' read -r name emoji label anim samp; do
+    EFFECTS+=("$name")
+    EMOJI[$name]="$emoji"
+    LABEL[$name]="$label"
+    ANIMATED[$name]="$anim"
+    SAMPLES[$name]="$samp"
+  done < <(
+    awk '
+      function flush() {
+        if (name != "") printf "%03d|%s|%s|%s|%s|%s\n", order, name, emoji, label, anim, samp
+      }
+      FNR == 1 {
+        flush()
+        name = FILENAME; sub(/.*\//, "", name); sub(/\.frag$/, "", name)
+        order = 500; emoji = "🎬"; label = name; anim = 0; samp = 0
+      }
+      /^[ \t]*\/\/[ \t]*(label|emoji|order)[ \t]*:/ {
+        key = $0; sub(/^[ \t]*\/\/[ \t]*/, "", key); sub(/[ \t]*:.*/, "", key)
+        val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]+$/, "", val)
+        if (key == "label") label = val
+        else if (key == "emoji") emoji = val
+        else order = val + 0
+      }
+      {
+        code = $0; sub(/\/\/.*/, "", code)
+        if (code ~ /(^|[^A-Za-z0-9_])time([^A-Za-z0-9_]|$)/) anim = 1
+        if (code ~ /texture[ \t]*\(/) samp = 1
+      }
+      END { flush() }
+    ' "$SHADER_DIR"/*.frag | sort | cut -d'|' -f2-
+  )
+  if [[ ${#EFFECTS[@]} -eq 0 ]]; then
+    notify_error "No .frag files in $SHADER_DIR"
     exit 1
   fi
 }
-
-require_env
-
-SHADER_DIR="$HUIX/scripts/shaders"
-STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-shader"
-STATE="${XDG_STATE_HOME:-$HOME/.local/state}/huix/shader"
-
-# Order for cycling (effect next/prev). none first — this is "off"
-EFFECTS=(none grayscale sepia invert warm cool vignette sharpen crt matrix posterize wave glitch jpeg)
-
-# Animated effects (use the uniform time). They need damage tracking off,
-# otherwise Hyprland doesn't redraw the frame
-ANIMATED=(wave glitch matrix)
-
-# Static effects that sample the texture with an OFFSET (curvature, distortion)
-# With precise damage tracking (2) they read undrawn neighboring areas and "break"
-# on fast screen changes. They need a redraw of the WHOLE monitor on any change
-# (damage_tracking 1), but can sleep when idle — there's no animation
-OFFSET=(crt jpeg sharpen)
-
-# Emojis and labels for the waybar indicator (status) — the single source of truth
-declare -A EMOJI=(
-  [none]="🌈" [grayscale]="⚫" [sepia]="🟤" [invert]="🔄" [warm]="🌅"
-  [cool]="❄️" [vignette]="🎯" [sharpen]="🔪" [crt]="📺" [matrix]="🟢"
-  [posterize]="🎨" [wave]="🌊" [glitch]="📡" [jpeg]="💾"
-)
-declare -A LABEL=(
-  [none]="Normal" [grayscale]="Grayscale" [sepia]="Sepia" [invert]="Invert"
-  [warm]="Warm (night)" [cool]="Cool" [vignette]="Vignette" [sharpen]="Sharpen"
-  [crt]="CRT" [matrix]="Matrix" [posterize]="Posterize" [wave]="Wave"
-  [glitch]="Glitch" [jpeg]="JPEG"
-)
-
-mkdir -p "$STATE_DIR"
 
 # Stack of active effects (in the order they were added). Empty = nothing applied
 stack=()
@@ -121,11 +136,6 @@ load_state() {
     # shellcheck disable=SC1090
     source "$STATE"
   fi
-  # Migration from the old format (single effect=<name>)
-  if [[ ${#stack[@]} -eq 0 && -n "${effect:-}" && "${effect:-none}" != "none" ]]; then
-    stack=("$effect")
-  fi
-  unset effect 2>/dev/null || true
 }
 
 save_state() {
@@ -177,7 +187,7 @@ stack_position() {
 
 # The effect samples the texture itself (geometry/distortion) — such one goes first in the chain
 samples_texture() {
-  grep -q 'texture(' "$SHADER_DIR/$1.frag"
+  [[ "${SAMPLES[$1]:-0}" == 1 ]]
 }
 
 # Render mode by the effect list: take the most demanding one
@@ -189,23 +199,29 @@ samples_texture() {
 #   default    — only per-pixel effects: default damage 2 + VFR (partial ok)
 set_render_mode() {
   case "$1" in
-  animated) hyprctl --batch "keyword debug:damage_tracking 0 ; keyword debug:vfr 0" >/dev/null ;;
-  fullstatic) hyprctl --batch "keyword debug:damage_tracking 1 ; keyword debug:vfr 1" >/dev/null ;;
-  *) hyprctl --batch "keyword debug:damage_tracking 2 ; keyword debug:vfr 1" >/dev/null ;;
+    animated) hyprctl --batch "keyword debug:damage_tracking 0 ; keyword debug:vfr 0" >/dev/null ;;
+    fullstatic) hyprctl --batch "keyword debug:damage_tracking 1 ; keyword debug:vfr 1" >/dev/null ;;
+    *) hyprctl --batch "keyword debug:damage_tracking 2 ; keyword debug:vfr 1" >/dev/null ;;
   esac
 }
 
 render_mode_for() { # $@ = effect names
   local n
-  for n in "$@"; do in_list "$n" "${ANIMATED[@]}" && {
+  for n in "$@"; do [[ "${ANIMATED[$n]:-0}" == 1 ]] && {
     printf 'animated'
     return
   }; done
-  for n in "$@"; do in_list "$n" "${OFFSET[@]}" && {
+  for n in "$@"; do samples_texture "$n" && {
     printf 'fullstatic'
     return
   }; done
   printf 'default'
+}
+
+# The GLSL of an effect without its metadata header — that header is for the manager,
+# not for the compiler
+frag_body() { # $1 = file
+  sed -E '/^[[:space:]]*\/\/[[:space:]]*(label|emoji|order)[[:space:]]*:/d' "$1"
 }
 
 # Rename all top-level definitions of an effect body (effect, hash, …) with the
@@ -217,9 +233,9 @@ rename_defs() { # $1 = file, $2 = suffix
     args+=(-e "s/\b$n\b/${n}$2/g")
   done
   if [[ ${#args[@]} -eq 0 ]]; then
-    cat "$1"
+    frag_body "$1"
   else
-    sed "${args[@]}" "$1"
+    frag_body "$1" | sed "${args[@]}"
   fi
 }
 
@@ -245,7 +261,7 @@ emit_shader() {
     printf '#define BRIGHTNESS %s\n\n' "$bright"
     for b in "${bodies[@]}"; do
       if [[ $i -eq 0 ]]; then
-        cat "$b"
+        frag_body "$b"
       else
         printf '\n'
         rename_defs "$b" "_$i"
@@ -301,7 +317,7 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
 
   # Alternate the file so the path always changes and Hyprland re-reads the shader
   slot=$((1 - slot))
-  local active="$STATE_DIR/active-$slot.frag"
+  local active="$RUNTIME_DIR/active-$slot.frag"
   emit_shader "$active" "${bodies[@]}"
 
   set_render_mode "$(render_mode_for "${stack[@]}")"
@@ -376,22 +392,22 @@ clear_stack() {
 cmd_effect() {
   load_state
   case "${1:-}" in
-  push | add) push_effect "${2:?effect name required}" ;;
-  set) set_single "${2:?effect name required}" ;;
-  toggle | off-or) toggle_effect "${2:?effect name required}" ;;
-  clear | off | none) clear_stack ;;
-  next | prev)
-    local cur="none" idx step n
-    [[ ${#stack[@]} -gt 0 ]] && cur="${stack[-1]}"
-    idx=$(effect_index "$cur")
-    n=${#EFFECTS[@]}
-    if [[ "$1" == "next" ]]; then step=1; else step=$((n - 1)); fi
-    set_single "${EFFECTS[$(((idx + step) % n))]}"
-    ;;
-  *)
-    notify_error "Usage: effect push|set|toggle|clear|next|prev <name>"
-    exit 1
-    ;;
+    push | add) push_effect "${2:?effect name required}" ;;
+    set) set_single "${2:?effect name required}" ;;
+    toggle | off-or) toggle_effect "${2:?effect name required}" ;;
+    clear | off | none) clear_stack ;;
+    next | prev)
+      local cur="none" idx step n
+      [[ ${#stack[@]} -gt 0 ]] && cur="${stack[-1]}"
+      idx=$(effect_index "$cur")
+      n=${#EFFECTS[@]}
+      if [[ "$1" == "next" ]]; then step=1; else step=$((n - 1)); fi
+      set_single "${EFFECTS[$(((idx + step) % n))]}"
+      ;;
+    *)
+      notify_error "Usage: effect push|set|toggle|clear|next|prev <name>"
+      exit 1
+      ;;
   esac
 }
 
@@ -400,29 +416,29 @@ cmd_bright() {
   # blocking flock queues them → the queue piles up → a hang. Non-blocking: if
   # another instance is already running — exit silently, and the atomic write in
   # emit_shader guarantees Hyprland won't see a broken shader even without serialization
-  exec 8>"$STATE_DIR/bright.lock"
+  exec 8>"$RUNTIME_DIR/bright.lock"
   flock -n 8 || exit 0
   load_state
   local step="0.05"
   case "${1:-}" in
-  up) bright=$(awk -v b="$bright" -v s="$step" 'BEGIN{v=b+s; if(v>2)v=2;    printf "%.2f", v}') ;;
-  down) bright=$(awk -v b="$bright" -v s="$step" 'BEGIN{v=b-s; if(v<0.1)v=0.1; printf "%.2f", v}') ;;
-  reset) bright="1.00" ;;
-  toggle) if [[ "$bright" == "1.00" ]]; then bright="0.50"; else bright="1.00"; fi ;;
-  set) bright=$(awk -v b="${2:?value required}" 'BEGIN{v=b; if(v>2)v=2; if(v<0.1)v=0.1; printf "%.2f", v}') ;;
-  get)
-    awk -v b="$bright" 'BEGIN{printf "%d", b*100}'
-    return 0
-    ;;
-  *)
-    notify_error "Usage: bright up|down|reset|toggle|set <0.10..2.00> | get"
-    exit 1
-    ;;
+    up) bright=$(awk -v b="$bright" -v s="$step" 'BEGIN{v=b+s; if(v>2)v=2;    printf "%.2f", v}') ;;
+    down) bright=$(awk -v b="$bright" -v s="$step" 'BEGIN{v=b-s; if(v<0.1)v=0.1; printf "%.2f", v}') ;;
+    reset) bright="1.00" ;;
+    toggle) if [[ "$bright" == "1.00" ]]; then bright="0.50"; else bright="1.00"; fi ;;
+    set) bright=$(awk -v b="${2:?value required}" 'BEGIN{v=b; if(v>2)v=2; if(v<0.1)v=0.1; printf "%.2f", v}') ;;
+    get)
+      awk -v b="$bright" 'BEGIN{printf "%d", b*100}'
+      return 0
+      ;;
+    *)
+      notify_error "Usage: bright up|down|reset|toggle|set <0.10..2.00> | get"
+      exit 1
+      ;;
   esac
   apply
   # Synchronous tag: while holding the key one popup updates instead of spamming the feed
   command -v notify-send >/dev/null 2>&1 && notify-send -u low \
-    -h string:x-canonical-private-synchronous:huix-bright \
+    -h string:x-canonical-private-synchronous:screen-shader-bright \
     "Brightness" "Brightness: $(awk -v b="$bright" 'BEGIN{printf "%d", b*100}')% ☀" || true
 }
 
@@ -441,7 +457,7 @@ cmd_flash() {
   local name="${1:?effect name required}" dur="${2:-1.0}"
   require_effect "$name"
 
-  exec 9>"$STATE_DIR/.flash.lock"
+  exec 9>"$RUNTIME_DIR/.flash.lock"
   flock -n 9 || exit 0
 
   load_state
@@ -455,10 +471,10 @@ cmd_flash() {
   for e in "${stack[@]}"; do
     samples_texture "$e" || bodies+=("$SHADER_DIR/$e.frag")
   done
-  local file="$STATE_DIR/flash.frag"
+  local file="$RUNTIME_DIR/flash.frag"
   emit_shader "$file" "${bodies[@]}"
 
-  # Render mode/cursor — over the whole pair (flash + stack)
+  # Render mode over the whole pair (flash + stack)
   set_render_mode "$(render_mode_for "$name" "${stack[@]}")"
 
   hyprctl keyword decoration:screen_shader "$file" >/dev/null
@@ -475,7 +491,7 @@ cmd_restore() {
   apply
 }
 
-# JSON for waybar (custom/shader): emojis of all stack effects + brightness percent
+# JSON for a waybar custom module: emojis of all stack effects + brightness percent
 cmd_status() {
   load_state
   local pct emoji="" labels="" e class
@@ -500,8 +516,8 @@ cmd_status() {
   fi
 }
 
-# List "<emoji> <label>|<value>" in EFFECTS order — the single source of truth for
-# the rofi picker (rofi-shader.sh reads exactly this). Active ones in the stack are
+# List "<emoji> <label>|<value>" in menu order — the single source of truth for the
+# rofi picker (rofi-shader.sh reads exactly this). Active ones in the stack are
 # marked with an apply number in the "01. " format (stack order = the order in
 # which effects were added), to see the accumulated composition and its order
 cmd_menu() {
@@ -527,26 +543,35 @@ cmd_reset_all() {
 }
 
 case "${1:-}" in
-effect)
-  shift
-  cmd_effect "$@"
-  ;;
-bright)
-  shift
-  cmd_bright "$@"
-  ;;
-flash)
-  shift
-  cmd_flash "$@"
-  ;;
-restore) cmd_restore ;;
-reset-all) cmd_reset_all ;;
-status) cmd_status ;;
-menu) cmd_menu ;;
-help | -h | --help) usage ;;
-*)
-  usage >&2
-  notify_error "Usage: screen-shader.sh effect|bright|reset-all|restore|status|menu|help"
-  exit 1
-  ;;
+  help | -h | --help)
+    usage
+    exit 0
+    ;;
+esac
+
+mkdir -p "$RUNTIME_DIR"
+load_effects
+
+case "${1:-}" in
+  effect)
+    shift
+    cmd_effect "$@"
+    ;;
+  bright)
+    shift
+    cmd_bright "$@"
+    ;;
+  flash)
+    shift
+    cmd_flash "$@"
+    ;;
+  restore) cmd_restore ;;
+  reset-all) cmd_reset_all ;;
+  status) cmd_status ;;
+  menu) cmd_menu ;;
+  *)
+    usage >&2
+    notify_error "Usage: screen-shader effect|bright|flash|reset-all|restore|status|menu|help"
+    exit 1
+    ;;
 esac
