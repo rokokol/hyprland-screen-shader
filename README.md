@@ -176,14 +176,7 @@ Working in a clone you get that for free: `nix flake check` compiles every effec
 
 ### How it renders
 
-Hyprland has to be told how hard to redraw, and that comes from two more header keys:
-
-```glsl
-// animated: yes     <- the picture changes over time, with nothing happening on screen
-// samples: yes      <- a pixel reads the screen elsewhere — the body calls texture(tex, …) away from uv
-```
-
-`yes`/`true`/`on`/`1`, case-insensitive; **anything else, including a missing line, is no**.
+Hyprland has to be told how hard to redraw, and that comes from the `animated:` and `samples:` lines of the header. `yes`/`true`/`on`/`1`, case-insensitive; **anything else, including a missing line, is no**.
 
 | | declared | `damage_tracking` / `vfr` | why |
 | --- | --- | --- | --- |
