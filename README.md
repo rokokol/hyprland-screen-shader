@@ -120,8 +120,8 @@ An effect is **one file** and nothing else — there is no list to append to and
 // label: Bloom          <- what the picker shows
 // emoji: 🔆             <- shown next to it, and in the waybar indicator
 // order: 65             <- position in the menu and in effect next/prev
-// animated: no          <- does not use time
-// samples: yes          <- reads tex away from uv, so it needs coarser damage
+// animated: no          <- the effect does not depend on time
+// samples: yes          <- a pixel takes its colour from elsewhere on screen, not only from itself
 
 vec3 effect(vec3 c, vec2 uv) {
     vec3 blur = texture(tex, uv + vec2(0.002)).rgb;
@@ -132,7 +132,7 @@ vec3 effect(vec3 c, vec2 uv) {
 Two hard requirements:
 
 - **exactly one function `vec3 effect(vec3 c, vec2 uv)`**, returning the new colour. It is the entry point the manager calls
-- **the header**, each line a `//` comment with `key: value`. Every key has a default, so an effect without one still works — badly: at the bottom of the menu as 🎬 under its file name, and rendered as if it neither moved nor sampled. The last two are the ones worth getting right — see [how it renders](#how-it-renders-you-declare-it)
+- **the header**, each line a `//` comment with `key: value`. Every key has a default, so an effect without one still works — badly: at the bottom of the menu as 🎬 under its file name, and rendered as if it neither moved nor looked past its own pixel. The last two are the ones worth getting right — see [how it renders](#how-it-renders-you-declare-it)
 
 What you get for free — do **not** declare any of it yourself:
 
@@ -179,8 +179,8 @@ Working in a clone you get that for free: `nix flake check` compiles every effec
 Hyprland has to be told how hard to redraw, and that comes from two more header keys:
 
 ```glsl
-// animated: yes     <- the body uses time
-// samples: yes      <- the body reads tex somewhere other than uv
+// animated: yes     <- the picture changes over time, with nothing happening on screen
+// samples: yes      <- a pixel reads the screen elsewhere — the body calls texture(tex, …) away from uv
 ```
 
 `yes`/`true`/`on`/`1`, case-insensitive; **anything else, including a missing line, is no**.

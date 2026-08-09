@@ -41,9 +41,10 @@ the single slot
 One effect is one file, $SCREEN_SHADER_DIR/<name>.frag, holding the function
 vec3 effect(vec3 c, vec2 uv) under a header of "// label:", "// emoji:", "// order:".
 Two more header keys tell Hyprland how hard to redraw, both "no" unless declared:
-"// animated: yes" — the body uses time, so a frame is needed every tick
-"// samples: yes"  — the body reads tex away from uv, so damage must cover the monitor
-                     (such effects also lead the chain, ahead of the colour filters)
+"// animated: yes" — the picture changes over time (the body uses time), so a frame every tick
+"// samples: yes"  — a pixel takes its colour from elsewhere on screen (the body reads tex
+                     away from uv), so damage has to cover the whole monitor; such effects
+                     also lead the chain, ahead of the colour filters
 
 Environment:
   SCREEN_SHADER_DIR    where the .frag files live (default: shaders/ next to this script)
