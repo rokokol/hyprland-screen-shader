@@ -132,7 +132,7 @@ vec3 effect(vec3 c, vec2 uv) {
 Two hard requirements:
 
 - **exactly one function `vec3 effect(vec3 c, vec2 uv)`**, returning the new colour. It is the entry point the manager calls
-- **the header**, each line a `//` comment with `key: value`. Every key has a default, so an effect without one still works — badly: at the bottom of the menu as 🎬 under its file name, and rendered as if it neither moved nor looked past its own pixel. The last two are the ones worth getting right — see [how it renders](#how-it-renders-you-declare-it)
+- **the header**, each line a `//` comment with `key: value`. Every key has a default, so an effect without one still works — badly: at the bottom of the menu as 🎬 under its file name, and rendered as if it neither moved nor looked past its own pixel. The last two are the ones worth getting right — see [how it renders](#how-it-renders)
 
 What you get for free — do **not** declare any of it yourself:
 
@@ -174,7 +174,7 @@ glslangValidator -S frag "$XDG_RUNTIME_DIR"/screen-shader/active-*.frag
 
 Working in a clone you get that for free: `nix flake check` compiles every effect, alone and composed with all the others, which is also the only way a name collision or a stray `main()` surfaces before you are staring at an unchanged screen.
 
-### How it renders: you declare it
+### How it renders
 
 Hyprland has to be told how hard to redraw, and that comes from two more header keys:
 
