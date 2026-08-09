@@ -1,6 +1,8 @@
 // label: Posterize
 // emoji: 🎨
 // order: 100
+// animated: no
+// samples: no
 // Posterize — sharply reduces the number of shades (comic / pop-art)
 vec3 effect(vec3 c, vec2 uv) {
     float levels = 5.0;

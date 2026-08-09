@@ -8,8 +8,7 @@ out vec4 fragColor;
 
 #define BRIGHTNESS 0.80
 
-// Animated glitch: jittering RGB split + occasional row shifts.
-// Uses time -> Hyprland redraws the frame continuously
+// Animated glitch: jittering RGB split + occasional row shifts
 float hash(float n) { return fract(sin(n) * 43758.5453); }
 
 vec3 effect(vec3 c, vec2 uv) {
@@ -33,8 +32,7 @@ vec3 effect(vec3 c, vec2 uv) {
 // sampling with 2x2 supersampling based on screen-space derivatives (dFdx/dFdy).
 // Scanlines are computed in curved space (wuv) — they bend together with the
 // screen. The mask is tied to physical pixels (gl_FragCoord) so its 3px
-// frequency doesn't "drift" and produce colour moiré.
-// Static (time is unused) — leaves Hyprland's debug options alone
+// frequency doesn't "drift" and produce colour moiré
 vec3 effect_1(vec3 c, vec2 uv) {
     // Tube curvature
     vec2 cc = uv - 0.5;

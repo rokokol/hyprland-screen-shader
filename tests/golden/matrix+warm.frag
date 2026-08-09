@@ -8,8 +8,7 @@ out vec4 fragColor;
 
 #define BRIGHTNESS 0.80
 
-// "Matrix": the screen in dark green + falling digital rain.
-// Animated (uses time)
+// "Matrix": the screen in dark green + falling digital rain
 float rnd(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }

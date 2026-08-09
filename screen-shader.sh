@@ -39,7 +39,11 @@ geometric ones don't stack (the last overrides the previous ones) — a limitati
 the single slot
 
 One effect is one file, $SCREEN_SHADER_DIR/<name>.frag, holding the function
-vec3 effect(vec3 c, vec2 uv) under a header of "// label:", "// emoji:", "// order:"
+vec3 effect(vec3 c, vec2 uv) under a header of "// label:", "// emoji:", "// order:".
+Two more header keys tell Hyprland how hard to redraw, both "no" unless declared:
+"// animated: yes" — the body uses time, so a frame is needed every tick
+"// samples: yes"  — the body reads tex away from uv, so damage must cover the monitor
+                     (such effects also lead the chain, ahead of the colour filters)
 
 Environment:
   SCREEN_SHADER_DIR    where the .frag files live (default: shaders/ next to this script)
@@ -79,9 +83,10 @@ STATE="${SCREEN_SHADER_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/screen-shade
 EFFECTS=()
 declare -A EMOJI LABEL ANIMATED SAMPLES
 
-# One awk pass over every .frag: the "// key: value" header gives the label, emoji and
-# menu position, and the code gives the render class. Comments are stripped before the
-# code is tested — crt.frag says "time is unused" in prose and must not read as animated
+# One awk pass over the "// key: value" header of every .frag — it carries the whole
+# effect record: label, emoji and menu position, plus the two facts Hyprland needs
+# (does it move, does it reach outside its own pixel). Both render keys default to no,
+# the plain colour filter that most effects are
 load_effects() {
   local name emoji label anim samp
   while IFS='|' read -r name emoji label anim samp; do
@@ -92,6 +97,10 @@ load_effects() {
     SAMPLES[$name]="$samp"
   done < <(
     awk '
+      function yes(v) {
+        v = tolower(v)
+        return (v == "yes" || v == "true" || v == "on" || v == "1") ? 1 : 0
+      }
       function flush() {
         if (name != "") printf "%03d|%s|%s|%s|%s|%s\n", order, name, emoji, label, anim, samp
       }
@@ -100,17 +109,14 @@ load_effects() {
         name = FILENAME; sub(/.*\//, "", name); sub(/\.frag$/, "", name)
         order = 500; emoji = "🎬"; label = name; anim = 0; samp = 0
       }
-      /^[ \t]*\/\/[ \t]*(label|emoji|order)[ \t]*:/ {
+      /^[ \t]*\/\/[ \t]*(label|emoji|order|animated|samples)[ \t]*:/ {
         key = $0; sub(/^[ \t]*\/\/[ \t]*/, "", key); sub(/[ \t]*:.*/, "", key)
         val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]+$/, "", val)
         if (key == "label") label = val
         else if (key == "emoji") emoji = val
-        else order = val + 0
-      }
-      {
-        code = $0; sub(/\/\/.*/, "", code)
-        if (code ~ /(^|[^A-Za-z0-9_])time([^A-Za-z0-9_]|$)/) anim = 1
-        if (code ~ /texture[ \t]*\(/) samp = 1
+        else if (key == "order") order = val + 0
+        else if (key == "animated") anim = yes(val)
+        else samp = yes(val)
       }
       END { flush() }
     ' "$SHADER_DIR"/*.frag | sort | cut -d'|' -f2-
@@ -185,13 +191,13 @@ stack_position() {
   return 1
 }
 
-# The effect samples the texture itself (geometry/distortion) — such one goes first in the chain
+# The effect declared "// samples: yes" (geometry/distortion) — it goes first in the chain
 samples_texture() {
   [[ "${SAMPLES[$1]:-0}" == 1 ]]
 }
 
 # Render mode by the effect list: take the most demanding one
-#   animated   — there's animation (uniform time): damage 0 (draw every frame) + VFR off
+#   animated   — one of them declared animation: damage 0 (draw every frame) + VFR off
 #                (with VFR on Hyprland goes idle and the animation stutters);
 #   fullstatic — there's a static one with offset sampling (curvature): damage 1 — on
 #                any change redraw the whole monitor (otherwise precise damage breaks
@@ -221,7 +227,7 @@ render_mode_for() { # $@ = effect names
 # The GLSL of an effect without its metadata header — that header is for the manager,
 # not for the compiler
 frag_body() { # $1 = file
-  sed -E '/^[[:space:]]*\/\/[[:space:]]*(label|emoji|order)[[:space:]]*:/d' "$1"
+  sed -E '/^[[:space:]]*\/\/[[:space:]]*(label|emoji|order|animated|samples)[[:space:]]*:/d' "$1"
 }
 
 # Rename all top-level definitions of an effect body (effect, hash, …) with the
@@ -242,8 +248,8 @@ rename_defs() { # $1 = file, $2 = suffix
 # Assemble the full GLSL from a chain of effect bodies: $1 = output file, then a
 # list of .frag files. The first body is used as is (function effect), the rest are
 # renamed (effect_1, effect_2, …) and applied in turn to the result of the previous
-# one. time in seconds since start: if any effect uses it, Hyprland redraws the
-# frame continuously; otherwise the uniform is optimized out by the compiler
+# one. time is seconds since start; an effect that ignores it has the uniform
+# optimized out by the compiler, so the preamble can declare it unconditionally
 emit_shader() {
   local out="$1"
   shift

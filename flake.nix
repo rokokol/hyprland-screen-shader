@@ -110,17 +110,55 @@
                 touch $out
               '';
 
-          # The header is an effect's only contract with the picker — one that forgets it
-          # silently lands at the bottom of the menu under its file name
+          # The header is an effect's whole contract — with the picker and with the
+          # compositor. Omitting a key is legal for a dropped-in shader, which then gets
+          # the defaults; in here it is a mistake
           shaders-metadata = pkgs.runCommand "shaders-metadata" { } ''
             for f in ${shaderDir}/*.frag; do
-              for key in label emoji order; do
+              for key in label emoji order animated samples; do
                 grep -qE "^//[[:space:]]*$key:" "$f" ||
                   { echo "$(basename "$f"): missing '// $key:' header"; exit 1; }
               done
             done
             touch $out
           '';
+
+          # "// animated:" is a claim; the compiler is the authority. Reflection lists only
+          # live uniforms, so "time" in it means the effect really moves — and one that
+          # moves without saying so renders frozen, the single header mistake that shows
+          # on screen. Claiming more than you need stays legal: it only costs redraws
+          shaders-render-class =
+            pkgs.runCommand "shaders-render-class"
+              {
+                nativeBuildInputs = [
+                  pkgs.glslang
+                  pkgs.gnugrep
+                  screen-shader
+                ];
+              }
+              ''
+                export HOME=$PWD XDG_RUNTIME_DIR=$PWD/rt SCREEN_SHADER_STATE=$PWD/state
+                mkdir -p stub "$XDG_RUNTIME_DIR"
+                printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"$CALLS"\n' >stub/hyprctl
+                chmod +x stub/hyprctl
+                export PATH=$PWD/stub:$PATH CALLS=$PWD/calls
+
+                for n in $(screen-shader menu | cut -d'|' -f2); do
+                  rm -f "$XDG_RUNTIME_DIR"/screen-shader/*.frag
+                  : >"$CALLS"
+                  printf 'stack=(%s)\nbright=1.00\nslot=0\n' "$n" >"$SCREEN_SHADER_STATE"
+                  screen-shader restore
+
+                  glslangValidator -S frag -l -q "$XDG_RUNTIME_DIR"/screen-shader/active-*.frag >refl
+                  moves=$(grep -c '^time:' refl || true)
+                  told=$(grep -c 'damage_tracking 0' "$CALLS" || true)
+                  if [ "$moves" -gt 0 ] && [ "$told" -eq 0 ]; then
+                    echo "$n: the compiler keeps uniform time live, but the effect is not classified animated"
+                    exit 1
+                  fi
+                done
+                touch $out
+              '';
 
           # The wrappers are the whole difference between the repo and the package:
           # they are what makes the effects findable and the picker self-contained

@@ -1,6 +1,8 @@
 // label: Vignette
 // emoji: 🎯
 // order: 60
+// animated: no
+// samples: no
 // Vignette — soft darkening toward the screen edges, focus in the centre
 vec3 effect(vec3 c, vec2 uv) {
     vec2 d = uv - 0.5;

@@ -120,6 +120,8 @@ An effect is **one file** and nothing else — there is no list to append to and
 // label: Bloom          <- what the picker shows
 // emoji: 🔆             <- shown next to it, and in the waybar indicator
 // order: 65             <- position in the menu and in effect next/prev
+// animated: no          <- does not use time
+// samples: yes          <- reads tex away from uv, so it needs coarser damage
 
 vec3 effect(vec3 c, vec2 uv) {
     vec3 blur = texture(tex, uv + vec2(0.002)).rgb;
@@ -130,7 +132,7 @@ vec3 effect(vec3 c, vec2 uv) {
 Two hard requirements:
 
 - **exactly one function `vec3 effect(vec3 c, vec2 uv)`**, returning the new colour. It is the entry point the manager calls
-- **the three header lines**, each a `//` comment with `key: value`. Miss them and the effect still works, but shows up at the bottom of the menu as 🎬 under its file name
+- **the header**, each line a `//` comment with `key: value`. Every key has a default, so an effect without one still works — badly: at the bottom of the menu as 🎬 under its file name, and rendered as if it neither moved nor sampled. The last two are the ones worth getting right — see [how it renders](#how-it-renders-you-declare-it)
 
 What you get for free — do **not** declare any of it yourself:
 
@@ -172,17 +174,26 @@ glslangValidator -S frag "$XDG_RUNTIME_DIR"/screen-shader/active-*.frag
 
 Working in a clone you get that for free: `nix flake check` compiles every effect, alone and composed with all the others, which is also the only way a name collision or a stray `main()` surfaces before you are staring at an unchanged screen.
 
-### The one thing you never declare: how it renders
+### How it renders: you declare it
 
-Hyprland has to be told how hard to redraw, and **that is read off your code**, not off the header:
+Hyprland has to be told how hard to redraw, and that comes from two more header keys:
 
-| | when | `damage_tracking` / `vfr` | why |
+```glsl
+// animated: yes     <- the body uses time
+// samples: yes      <- the body reads tex somewhere other than uv
+```
+
+`yes`/`true`/`on`/`1`, case-insensitive; **anything else, including a missing line, is no**.
+
+| | declared | `damage_tracking` / `vfr` | why |
 | --- | --- | --- | --- |
-| animated | the body uses `time` | `0` / `0` | a frame every tick; with VFR on Hyprland idles and the animation stutters |
-| offset | the body calls `texture()` | `1` / `1` | offset sampling reads neighbouring areas, which precise damage has not drawn yet — redraw the whole monitor, but still sleep when idle |
+| animated | `animated: yes` | `0` / `0` | a frame every tick; with VFR on Hyprland idles and the animation stutters |
+| offset | `samples: yes` | `1` / `1` | offset sampling reads neighbouring areas, which precise damage has not drawn yet — redraw the whole monitor, but still sleep when idle |
 | plain | neither | `2` / `1` | per-pixel, partial damage is fine |
 
-Comments are stripped before that test, so prose mentioning `time` will not make a static effect animated. Sampling `texture()` also puts the effect **first** in the chain, ahead of the colour filters — geometry happens once, colour grades the result.
+`samples: yes` also puts the effect **first** in the chain, ahead of the colour filters — geometry happens once, colour grades the result.
+
+Get it wrong upwards and you spend redraws; downwards is what you actually notice — an animation that stands still, or distortion that smears over undamaged screen. So `nix flake check` verifies the `animated` half against the compiler: reflection lists only the uniforms a shader really uses, so an effect whose `time` survives compilation and does not say `animated: yes` fails the build.
 
 ## Waybar
 
@@ -203,7 +214,7 @@ tests/run.sh              # 69 assertions, no compositor needed
 tests/run.sh --update     # re-record the golden shaders after a deliberate change
 ```
 
-`hyprctl` and `notify-send` are stubbed, state goes to a scratch directory, and the generated GLSL is diffed against committed golden files — so a change in how shaders are assembled shows up as a diff rather than as a surprise on the next login. `nix flake check` runs the suite plus: every effect compiled with `glslangValidator` alone and all of them composed at once, the `// label:` headers, the packaged wrappers, and the Home Manager module evaluated against option stubs
+`hyprctl` and `notify-send` are stubbed, state goes to a scratch directory, and the generated GLSL is diffed against committed golden files — so a change in how shaders are assembled shows up as a diff rather than as a surprise on the next login. `nix flake check` runs the suite plus: every effect compiled with `glslangValidator` alone and all of them composed at once, the headers being complete and their `animated:` agreeing with what the compiler kept live, the packaged wrappers, and the Home Manager module evaluated against option stubs
 
 ## Layout
 

@@ -1,6 +1,8 @@
 // label: JPEG
 // emoji: 💾
 // order: 130
+// animated: no
+// samples: yes
 // JPEG artefacts: 8×8 DCT blocking + 4:2:0 chroma subsampling (16×16 for colour) +
 // aggressive chroma quantization + Gibbs ringing + saturation degradation.
 // Mimics heavy JPEG compression (quality ~5–10).

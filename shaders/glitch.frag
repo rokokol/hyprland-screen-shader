@@ -1,8 +1,9 @@
 // label: Glitch
 // emoji: 📡
 // order: 120
-// Animated glitch: jittering RGB split + occasional row shifts.
-// Uses time -> Hyprland redraws the frame continuously
+// animated: yes
+// samples: yes
+// Animated glitch: jittering RGB split + occasional row shifts
 float hash(float n) { return fract(sin(n) * 43758.5453); }
 
 vec3 effect(vec3 c, vec2 uv) {

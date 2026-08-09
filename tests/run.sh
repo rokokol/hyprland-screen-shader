@@ -280,18 +280,38 @@ is "a dropped-in .frag needs no registration" \
 has "its header drives the picker entry" "$menu" "🅾 Zero|zero"
 has "a header-less effect falls back to its file name" "$menu" "🎬 bare|bare"
 
-printf '// label: Live\n// emoji: 🅰\n// order: 6\nvec3 effect(vec3 c, vec2 uv) { return texture(tex, uv + time).rgb; }\n' >"$custom/live.frag"
-state "live"
-SCREEN_SHADER_DIR="$custom" run restore
-is "using time is what makes an effect animated — no table says so" \
-  "hyprctl --batch keyword debug:damage_tracking 0 ; keyword debug:vfr 0" \
-  "$(grep -F 'damage_tracking' "$CALLS")"
-printf '// label: Warp\n// emoji: 🅱\n// order: 7\n// mentions time only in prose\nvec3 effect(vec3 c, vec2 uv) { return texture(tex, uv * 0.99).rgb; }\n' >"$custom/warp.frag"
-state "warp"
-SCREEN_SHADER_DIR="$custom" run restore
-is "a comment saying time does not make it animated" \
-  "hyprctl --batch keyword debug:damage_tracking 1 ; keyword debug:vfr 1" \
-  "$(grep -F 'damage_tracking' "$CALLS")"
+# ── the render class comes from the header ──────────────────────────────────────
+section "render class"
+# One shader alone in a scratch directory; its class is the damage_tracking it asks for
+mode_of() { # $1 = the whole .frag
+  local dir="$WORK/one"
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  printf '%s\n' "$1" >"$dir/probe.frag"
+  state "probe"
+  SCREEN_SHADER_DIR="$dir" run restore >/dev/null
+  case "$(grep -F 'damage_tracking' "$CALLS")" in
+    *"damage_tracking 0"*) printf 'animated' ;;
+    *"damage_tracking 1"*) printf 'fullstatic' ;;
+    *) printf 'default' ;;
+  esac
+}
+
+is "a header-less effect costs the least" "default" \
+  "$(mode_of 'vec3 effect(vec3 c, vec2 uv) { return c * 0.5; }')"
+is "// animated: yes needs no time in the code" "animated" "$(mode_of '// animated: yes
+vec3 effect(vec3 c, vec2 uv) { return c * 0.5; }')"
+is "// samples: yes asks for whole-monitor damage" "fullstatic" "$(mode_of '// samples: yes
+vec3 effect(vec3 c, vec2 uv) { return c * 0.5; }')"
+is "animation outranks sampling" "animated" "$(mode_of '// animated: yes
+// samples: yes
+vec3 effect(vec3 c, vec2 uv) { return texture(tex, uv).rgb; }')"
+is "true is yes as well, whatever the case" "animated" "$(mode_of '// animated: TRUE
+vec3 effect(vec3 c, vec2 uv) { return c; }')"
+is "anything else is a no" "default" "$(mode_of '// animated: maybe
+vec3 effect(vec3 c, vec2 uv) { return c; }')"
+is "the header alone decides the class" "default" "$(mode_of '// label: Live
+vec3 effect(vec3 c, vec2 uv) { return texture(tex, uv + time).rgb; }')"
 
 # ── golden shaders ───────────────────────────────────────────────────────────────
 section "golden"

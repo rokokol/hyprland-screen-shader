@@ -1,14 +1,15 @@
 // label: CRT
 // emoji: 📺
 // order: 80
+// animated: no
+// samples: yes
 // Retro CRT: tube curvature + shadow RGB mask + scanlines + vignette.
 // The curvature resamples the image along bowed coordinates, which makes the
 // straight edges of windows/text jaggy (that very artefact). So we SMOOTH the
 // sampling with 2x2 supersampling based on screen-space derivatives (dFdx/dFdy).
 // Scanlines are computed in curved space (wuv) — they bend together with the
 // screen. The mask is tied to physical pixels (gl_FragCoord) so its 3px
-// frequency doesn't "drift" and produce colour moiré.
-// Static (time is unused) — leaves Hyprland's debug options alone
+// frequency doesn't "drift" and produce colour moiré
 vec3 effect(vec3 c, vec2 uv) {
     // Tube curvature
     vec2 cc = uv - 0.5;

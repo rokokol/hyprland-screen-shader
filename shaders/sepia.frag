@@ -1,6 +1,8 @@
 // label: Sepia
 // emoji: 🟤
 // order: 20
+// animated: no
+// samples: no
 // Warm "vintage" sepia
 vec3 effect(vec3 c, vec2 uv) {
     return vec3(

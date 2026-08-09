@@ -1,6 +1,8 @@
 // label: Sharpen
 // emoji: 🔪
 // order: 70
+// animated: no
+// samples: yes
 // Aggressive sharpening — 3×3 kernel: weight 9 at the centre, −1 for each of the 8 neighbours
 vec3 effect(vec3 c, vec2 uv) {
     vec2 px = vec2(fwidth(uv.x), fwidth(uv.y));

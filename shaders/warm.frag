@@ -1,6 +1,8 @@
 // label: Warm (night)
 // emoji: 🌅
 // order: 40
+// animated: no
+// samples: no
 // Warm "night" filter — cuts the blue spectrum, easier on the eyes in the evening
 vec3 effect(vec3 c, vec2 uv) {
     return c * vec3(1.0, 0.80, 0.58);
