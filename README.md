@@ -31,9 +31,9 @@ nix run github:rokokol/hyprland-screen-shader -- flash crt 3
 | --- | --- | --- |
 | ⚫ `grayscale` | 🟤 `sepia` | 🔄 `invert` |
 | 🌅 `warm` — cuts blue, for the evening | ❄️ `cool` | 🎯 `vignette` |
-| 🔪 `sharpen` — 3×3 kernel | 🎨 `posterize` | 🌈 `none` — dimming only |
-| 📺 `crt` — curvature, shadow mask, scanlines | 🟢 `matrix` — digital rain | 💾 `jpeg` — DCT blocking and ringing |
-| 🌊 `wave` — a slow ripple | 📡 `glitch` — RGB split and row tearing | |
+| 📖 `reading` — green paper, no glare | 🎨 `posterize` | 🌈 `none` — dimming only |
+| 🔪 `sharpen` — 3×3 kernel | 📺 `crt` — curvature, shadow mask, scanlines | 🟢 `matrix` — digital rain |
+| 💾 `jpeg` — DCT blocking and ringing | 🌊 `wave` — a slow ripple | 📡 `glitch` — RGB split and row tearing |
 
 They **stack**. `effect push` adds a filter over the current ones, `effect toggle` adds or removes, `effect clear` drops everything. Effects that sample the texture at an offset (`crt`, `wave`, `glitch`, `jpeg`, `sharpen`) are chained first, colour filters after — so geometry happens once and colour grades the result. Two geometric effects can't honestly compose in one pass, so the last one wins
 

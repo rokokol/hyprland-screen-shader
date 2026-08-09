@@ -82,7 +82,7 @@ section "menu"
 state ""
 menu="$(run menu)"
 is "order comes from the // order: headers" \
-  "none grayscale sepia invert warm cool vignette sharpen crt matrix posterize wave glitch jpeg" \
+  "none grayscale sepia invert warm reading cool vignette sharpen crt matrix posterize wave glitch jpeg" \
   "$(printf '%s\n' "$menu" | cut -d'|' -f2 | tr '\n' ' ' | sed 's/ $//')"
 has "labels and emojis come from the headers" "$menu" "🌅 Warm (night)|warm"
 
