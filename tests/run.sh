@@ -35,6 +35,8 @@ chmod +x "$WORK/bin/hyprctl" "$WORK/bin/notify-send"
 export PATH="$WORK/bin:$PATH"
 export XDG_RUNTIME_DIR="$WORK/rt"
 export SCREEN_SHADER_STATE="$WORK/state"
+# Never the developer's own added effects: the suite asserts the exact effect list
+export SCREEN_SHADER_USER_DIR="$WORK/added"
 export CALLS="$WORK/calls" NOTIFY="$WORK/notify"
 mkdir -p "$XDG_RUNTIME_DIR"
 
@@ -312,6 +314,64 @@ is "anything else is a no" "default" "$(mode_of '// animated: maybe
 vec3 effect(vec3 c, vec2 uv) { return c; }')"
 is "the header alone decides the class" "default" "$(mode_of '// label: Live
 vec3 effect(vec3 c, vec2 uv) { return texture(tex, uv + time).rgb; }')"
+
+# ── adding and removing effects at runtime ──────────────────────────────────────
+section "add"
+src="$WORK/src"
+mkdir -p "$src"
+printf 'vec3 effect(vec3 c, vec2 uv) { return c * 0.5; }\n' >"$src/half.frag"
+printf '#version 300 es\nprecision highp float;\nin vec2 v_texcoord;\nuniform sampler2D tex;\nout vec4 fragColor;\nvoid main() { fragColor = texture(tex, v_texcoord); }\n' >"$src/standalone.frag"
+
+state ""
+run add "$src/half.frag" --label Half --emoji 🅷 --order 7 >/dev/null
+is "the added file lands in the writable directory" 0 "$([[ -f "$SCREEN_SHADER_USER_DIR/half.frag" ]] && echo 0 || echo 1)"
+has "and shows up in the menu with the flags as its header" "$(run menu)" "🅷 Half|half"
+is "the flags are written on top of the file" \
+  "// label: Half|// emoji: 🅷|// order: 7" \
+  "$(head -3 "$SCREEN_SHADER_USER_DIR/half.frag" | tr '\n' '|' | sed 's/|$//')"
+
+out="$(run add "$src/half.frag" --label Other 2>&1)"
+is "adding the same name twice needs -f" 1 "$?"
+has "and says why" "$out$(cat "$NOTIFY")" "Already added"
+run add "$src/half.frag" --label Other -f >/dev/null
+has "-f replaces it" "$(run menu)" "🎬 Other|half"
+
+out="$(run add "$src/standalone.frag" 2>&1)"
+is "a standalone shader is not taken for one of ours" 1 "$?"
+has "and the message names the way out" "$out$(cat "$NOTIFY")" "--raw"
+out="$(run add "$src/half.frag" --name rawish --raw 2>&1)"
+is "and --raw on a file without main() is refused too" 1 "$?"
+
+run add "$src/standalone.frag" --raw --label Plain --emoji 🅿 --order 8 >/dev/null
+has "a raw shader adds fine when declared" "$(run menu)" "🅿 Plain|standalone"
+state "standalone"
+run restore
+body="$(cat "$(emitted)")"
+has "and reaches the compositor as it was written" "$body" "void main()"
+hasnt "with no generated preamble around it" "$body" "#define BRIGHTNESS"
+hasnt "and its header stripped" "$body" "// label:"
+
+state "sepia"
+run effect toggle standalone >/dev/null
+is "a raw effect takes the slot alone" "standalone" "$(stack_now)"
+run effect toggle sepia >/dev/null
+is "and anything added after it drops it" "sepia" "$(stack_now)"
+
+# ── remove ──────────────────────────────────────────────────────────────────────
+section "remove"
+state "half"
+run remove half >/dev/null
+is "removing takes the file away" 1 "$([[ -f "$SCREEN_SHADER_USER_DIR/half.frag" ]] && echo 0 || echo 1)"
+is "and the effect leaves the stack with it" "" "$(stack_now)"
+out="$(run remove sepia 2>&1)"
+is "an installed effect is not ours to delete" 1 "$?"
+has "and it says so" "$out$(cat "$NOTIFY")" "comes with the package"
+
+run add "$src/half.frag" --name sepia --label Mine >/dev/null
+has "an added name shadows the installed effect" "$(run menu)" "🎬 Mine|sepia"
+run remove sepia >/dev/null
+has "and removing it uncovers the installed one again" "$(run menu)" "🟤 Sepia|sepia"
+run remove standalone >/dev/null
 
 # ── golden shaders ───────────────────────────────────────────────────────────────
 section "golden"

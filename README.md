@@ -99,6 +99,8 @@ exec  = screen-shader restore
 ```sh
 screen-shader effect push|set|toggle|clear|next|prev <name>
 screen-shader bright up|down|reset|toggle|set <0.10..2.00>|get
+screen-shader add <file.frag> [flags]       # install an effect, now, without a rebuild
+screen-shader remove <name>                 # and take it away again
 screen-shader flash [-k] <name> [seconds]   # over the current stack, state untouched
 screen-shader restore                       # re-apply the saved choice
 screen-shader reset-all                     # effects and brightness in one go
@@ -148,16 +150,49 @@ Do not write `#version`, `precision`, `in`/`out`/`uniform` declarations or `main
 
 The file name is the effect's name: `bloom.frag` gives `screen-shader effect push bloom`.
 
-### Where to put it
+### Two directories: the declared one and the added one
 
-| installed by | put it in |
+Effects are read from **two** places, in this order:
+
+| | is | written by | survives |
+| --- | --- | --- | --- |
+| **declared** | `$SCREEN_SHADER_DIR` — the effects that ship with the install. Under Nix a store path, read-only | `install.sh`, a clone, or `programs.screen-shader.extraShaders` | a rebuild recreates it exactly; nothing else can touch it |
+| **added** | `$SCREEN_SHADER_USER_DIR`, by default `$XDG_DATA_HOME/screen-shader/shaders` | `screen-shader add` / `remove` | it is your data, not the package — a rebuild does not go near it |
+
+A name present in both is taken from the **added** one, so `add` can also override a shipped effect. `remove` deletes only from the added directory, which uncovers the declared effect of the same name rather than destroying it.
+
+The split is what makes both halves honest under Nix: the declarative one is reproducible and belongs in the config, the imperative one is for trying something out now, at the cost of not being in the config. Once an effect earns its place, move it to `extraShaders` and `remove` the added copy.
+
+```nix
+programs.screen-shader.extraShaders.bloom = ./bloom.frag;
+```
+
+### Adding one right now
+
+```sh
+screen-shader add ~/bloom.frag --label Bloom --emoji 🔆 --order 65 --samples
+```
+
+The flags are written as header lines **on top of** the file, and the same keys are dropped from the copy below — so a shader that knows nothing about this manager still lands with a header, and one that carries its own keeps whatever the flags do not override.
+
+| flag | |
 | --- | --- |
-| `install.sh` | `$PREFIX/share/screen-shader/shaders/` |
-| a clone | `shaders/` in the checkout |
-| Nix, one-off | `SCREEN_SHADER_DIR=~/my-shaders screen-shader effect set bloom` |
-| Nix, for good | `programs.screen-shader.extraShaders.bloom = ./bloom.frag;` |
+| `--name <n>` | the effect name; default is the file name |
+| `--label` / `--emoji` / `--order` | the picker entry |
+| `--animated` / `--samples` / `--raw` | the header booleans; `--no-animated` and friends for the opposite |
+| `-f` | replace one added earlier |
 
-`extraShaders` merges into the shipped set, so a key that already exists **replaces** the shipped effect — that is also how you re-colour or re-order one of mine without forking.
+### A shader that was not written for this manager
+
+An ordinary Hyprland screen shader — its own `#version`, `main()`, writing `fragColor` — goes in with `--raw`:
+
+```sh
+screen-shader add ~/blue-light.frag --raw --label "Blue light" --emoji 🔵 --order 45
+```
+
+It is handed to Hyprland exactly as written, header lines aside. The honest cost is that it **owns the frame**: it brings its own `main()`, so nothing composes with it. Selecting it clears the stack, selecting anything else drops it, and soft brightness has no place to multiply — there is no generated `main()` to put the multiply in.
+
+Without `--raw`, a file defining `main()` is refused with that explanation rather than silently producing a shader that never compiles.
 
 ### Checking it works
 

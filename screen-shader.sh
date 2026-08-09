@@ -17,6 +17,13 @@ Commands:
   bright toggle           100% ↔ 50%
   bright set <0.10..2>    brightness exactly
   bright get              current brightness in percent (integer, for the UI)
+  add <file.frag> [flags] install an effect into the writable directory
+                          --name <n>       effect name (default: the file name)
+                          --label/--emoji/--order <v>
+                          --animated  --samples  --raw   (--no-… for the opposite)
+                          -f               replace one added earlier
+                          the flags are written as header lines on top of the file
+  remove <name>           drop an added effect (an installed one is not ours to delete)
   flash [-k] <name> [sec] effect for N seconds (default 1.0), then revert;
                           composited OVER the current stack (composition);
                           durable state is not touched;
@@ -38,16 +45,24 @@ assembled into one generated GLSL. Effects that sample the texture with an offse
 geometric ones don't stack (the last overrides the previous ones) — a limitation of
 the single slot
 
-One effect is one file, $SCREEN_SHADER_DIR/<name>.frag, holding the function
-vec3 effect(vec3 c, vec2 uv) under a header of "// label:", "// emoji:", "// order:".
-Two more header keys tell Hyprland how hard to redraw, both "no" unless declared:
+One effect is one file, <name>.frag, holding the function vec3 effect(vec3 c, vec2 uv)
+under a header of "// label:", "// emoji:", "// order:". Effects are read from TWO
+directories: the installed one ($SCREEN_SHADER_DIR, read-only under Nix) and the
+writable one ($SCREEN_SHADER_USER_DIR) that "add" writes to; a name present in both is
+taken from the writable one
+
+Three more header keys, all "no" unless declared:
 "// animated: yes" — the picture changes over time (the body uses time), so a frame every tick
 "// samples: yes"  — a pixel takes its colour from elsewhere on screen (the body reads tex
                      away from uv), so damage has to cover the whole monitor; such effects
                      also lead the chain, ahead of the colour filters
+"// raw: yes"      — a standalone shader with its own #version and main(), handed to
+                     Hyprland as it is. It owns the frame, so it runs alone: no stacking
+                     with other effects and no soft brightness over it
 
 Environment:
-  SCREEN_SHADER_DIR    where the .frag files live (default: shaders/ next to this script)
+  SCREEN_SHADER_DIR    the installed effects (default: shaders/ next to this script)
+  SCREEN_SHADER_USER_DIR  the added ones (default: $XDG_DATA_HOME/screen-shader/shaders)
   SCREEN_SHADER_STATE  durable state file (default: $XDG_STATE_HOME/screen-shader/state)
   WAYBAR_SHADER_SIGNAL RT signal to poke waybar with after a change (unset = don't)
   SHADER_NO_SIGNAL     set to any value to suppress that signal
@@ -74,58 +89,78 @@ signal_waybar() {
   pkill -RTMIN+"$WAYBAR_SHADER_SIGNAL" waybar 2>/dev/null || true
 }
 
+# The keys an effect header may declare — the one list the scanner, the header stripper
+# and "add" all read
+HEADER_KEYS='label|emoji|order|animated|samples|raw'
+
 # Resolve through symlinks, so a link to this script on PATH still finds its shaders
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SHADER_DIR="${SCREEN_SHADER_DIR:-$(dirname "$SELF")/shaders}"
+# Effects added with "add" live apart from the installed ones: that directory has to be
+# writable, and under Nix the installed one is a read-only store path. Scanned second,
+# so a name landing here replaces the installed effect of the same name
+USER_DIR="${SCREEN_SHADER_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/screen-shader/shaders}"
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/screen-shader"
 STATE="${SCREEN_SHADER_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/screen-shader/state}"
 
 # Filled by load_effects from the .frag files themselves — there is no table here
 EFFECTS=()
-declare -A EMOJI LABEL ANIMATED SAMPLES
+declare -A EMOJI LABEL ANIMATED SAMPLES RAW FILE
 
 # One awk pass over the "// key: value" header of every .frag — it carries the whole
 # effect record: label, emoji and menu position, plus the two facts Hyprland needs
 # (does it move, does it reach outside its own pixel). Both render keys default to no,
 # the plain colour filter that most effects are
 load_effects() {
-  local name emoji label anim samp
-  while IFS='|' read -r name emoji label anim samp; do
+  local name emoji label anim samp raw file f
+  # One file per effect name, the user directory winning — the same rule extraShaders
+  # follows at build time
+  local -A found=()
+  for f in "$SHADER_DIR"/*.frag "$USER_DIR"/*.frag; do
+    [[ -f "$f" ]] || continue
+    name="${f##*/}"
+    found["${name%.frag}"]="$f"
+  done
+  if [[ ${#found[@]} -eq 0 ]]; then
+    notify_error "No .frag files in $SHADER_DIR"
+    exit 1
+  fi
+  while IFS='|' read -r name emoji label anim samp raw file; do
     EFFECTS+=("$name")
     EMOJI[$name]="$emoji"
     LABEL[$name]="$label"
     ANIMATED[$name]="$anim"
     SAMPLES[$name]="$samp"
+    RAW[$name]="$raw"
+    FILE[$name]="$file"
   done < <(
-    awk '
+    awk -v keys="$HEADER_KEYS" '
       function yes(v) {
         v = tolower(v)
         return (v == "yes" || v == "true" || v == "on" || v == "1") ? 1 : 0
       }
       function flush() {
-        if (name != "") printf "%03d|%s|%s|%s|%s|%s\n", order, name, emoji, label, anim, samp
+        if (name != "") printf "%03d|%s|%s|%s|%s|%s|%s|%s\n", order, name, emoji, label, anim, samp, raw, file
       }
       FNR == 1 {
         flush()
+        file = FILENAME
         name = FILENAME; sub(/.*\//, "", name); sub(/\.frag$/, "", name)
-        order = 500; emoji = "🎬"; label = name; anim = 0; samp = 0
+        order = 500; emoji = "🎬"; label = name; anim = 0; samp = 0; raw = 0
       }
-      /^[ \t]*\/\/[ \t]*(label|emoji|order|animated|samples)[ \t]*:/ {
+      $0 ~ "^[ \t]*//[ \t]*(" keys ")[ \t]*:" {
         key = $0; sub(/^[ \t]*\/\/[ \t]*/, "", key); sub(/[ \t]*:.*/, "", key)
         val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]+$/, "", val)
         if (key == "label") label = val
         else if (key == "emoji") emoji = val
         else if (key == "order") order = val + 0
         else if (key == "animated") anim = yes(val)
-        else samp = yes(val)
+        else if (key == "samples") samp = yes(val)
+        else raw = yes(val)
       }
       END { flush() }
-    ' "$SHADER_DIR"/*.frag | sort | cut -d'|' -f2-
+    ' "${found[@]}" | sort | cut -d'|' -f2-
   )
-  if [[ ${#EFFECTS[@]} -eq 0 ]]; then
-    notify_error "No .frag files in $SHADER_DIR"
-    exit 1
-  fi
 }
 
 # Stack of active effects (in the order they were added). Empty = nothing applied
@@ -197,6 +232,12 @@ samples_texture() {
   [[ "${SAMPLES[$1]:-0}" == 1 ]]
 }
 
+# A standalone shader ("// raw: yes"): it brings its own main(), so it takes the slot
+# whole — nothing composes with it and soft brightness cannot multiply its output
+is_raw() {
+  [[ "${RAW[$1]:-0}" == 1 ]]
+}
+
 # Render mode by the effect list: take the most demanding one
 #   animated   — one of them declared animation: damage 0 (draw every frame) + VFR off
 #                (with VFR on Hyprland goes idle and the animation stutters);
@@ -228,7 +269,7 @@ render_mode_for() { # $@ = effect names
 # The GLSL of an effect without its metadata header — that header is for the manager,
 # not for the compiler
 frag_body() { # $1 = file
-  sed -E '/^[[:space:]]*\/\/[[:space:]]*(label|emoji|order|animated|samples)[[:space:]]*:/d' "$1"
+  sed -E "/^[[:space:]]*\/\/[[:space:]]*($HEADER_KEYS)[[:space:]]*:/d" "$1"
 }
 
 # Rename all top-level definitions of an effect body (effect, hash, …) with the
@@ -294,8 +335,25 @@ emit_shader() {
 # ones after. Prints one name per line
 ordered_stack() {
   local e
-  for e in "${stack[@]}"; do samples_texture "$e" && printf '%s\n' "$e"; done
-  for e in "${stack[@]}"; do samples_texture "$e" || printf '%s\n' "$e"; done
+  # A raw effect never joins a chain — it owns the slot alone or it is skipped
+  for e in "${stack[@]}"; do
+    is_raw "$e" && continue
+    samples_texture "$e" && printf '%s\n' "$e"
+  done
+  for e in "${stack[@]}"; do
+    is_raw "$e" && continue
+    samples_texture "$e" || printf '%s\n' "$e"
+  done
+  return 0
+}
+
+# Pick the slot file to write next into ACTIVE. Alternating, so the path Hyprland is
+# handed always differs and it re-reads the shader instead of keeping the compiled one.
+# A global rather than a printed value: the slot number has to survive into save_state
+ACTIVE=""
+next_slot() {
+  slot=$((1 - slot))
+  ACTIVE="$RUNTIME_DIR/active-$slot.frag"
 }
 
 apply() { # $1 (opt.) = transient: don't save state to durable state
@@ -308,36 +366,62 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
     return
   fi
 
+  # A raw effect goes to the slot as it was written, header lines aside: it owns main(),
+  # so there is nothing to compose it with and no place to multiply brightness in
+  if [[ ${#stack[@]} -eq 1 ]] && is_raw "${stack[0]}"; then
+    local tmp
+    next_slot
+    tmp="$ACTIVE.tmp.$$"
+    frag_body "${FILE[${stack[0]}]}" >"$tmp"
+    mv -f "$tmp" "$ACTIVE"
+    set_render_mode "$(render_mode_for "${stack[0]}")"
+    hyprctl keyword decoration:screen_shader "$ACTIVE" >/dev/null
+    [[ "${1:-}" == "transient" ]] || save_state
+    signal_waybar
+    return
+  fi
+
   # Body list in chain order. An empty stack with bright<1 is a single passthrough
   local bodies=() e
   if [[ ${#stack[@]} -eq 0 ]]; then
-    bodies=("$SHADER_DIR/none.frag")
+    bodies=("${FILE[none]:?the none passthrough is missing from the shader directory}")
   else
     while IFS= read -r e; do
-      [[ -f "$SHADER_DIR/$e.frag" ]] || {
+      [[ -n "${FILE[$e]:-}" ]] || {
         notify_error "Shader not found: $e"
         exit 1
       }
-      bodies+=("$SHADER_DIR/$e.frag")
+      bodies+=("${FILE[$e]}")
     done < <(ordered_stack)
   fi
 
-  # Alternate the file so the path always changes and Hyprland re-reads the shader
-  slot=$((1 - slot))
-  local active="$RUNTIME_DIR/active-$slot.frag"
-  emit_shader "$active" "${bodies[@]}"
+  next_slot
+  emit_shader "$ACTIVE" "${bodies[@]}"
 
   set_render_mode "$(render_mode_for "${stack[@]}")"
-  hyprctl keyword decoration:screen_shader "$active" >/dev/null
+  hyprctl keyword decoration:screen_shader "$ACTIVE" >/dev/null
   [[ "${1:-}" == "transient" ]] || save_state
   signal_waybar
 }
 
 # Check the name and that the file exists
 require_effect() {
-  if [[ ! -f "$SHADER_DIR/$1.frag" ]]; then
+  if [[ -z "${FILE[$1]:-}" ]]; then
     notify_error "Unknown effect: $1"
     exit 1
+  fi
+}
+
+# A raw effect cannot share the slot, so adding one drops whatever was there — and so
+# does adding anything else while one is active. Emptying the stack beats refusing:
+# the picker toggles effects, and a refusal there just looks like a dead entry
+make_room_for() { # $1 = the effect about to be added
+  if is_raw "$1"; then
+    [[ ${#stack[@]} -eq 0 ]] || notify_info "Shader" "${LABEL[$1]} is a raw shader — it runs alone (・_・)"
+    stack=()
+  elif [[ ${#stack[@]} -eq 1 ]] && is_raw "${stack[0]}"; then
+    notify_info "Shader" "${LABEL[${stack[0]}]} is a raw shader — dropping it (・_・)"
+    stack=()
   fi
 }
 
@@ -349,6 +433,7 @@ push_effect() {
     return
   fi
   require_effect "$name"
+  make_room_for "$name"
   if in_list "$name" "${stack[@]}"; then
     notify_info "Shader" "Already in the stack: ${LABEL[$name]} (・_・)"
     return
@@ -384,6 +469,7 @@ toggle_effect() {
     apply
     notify_info "Shader" "Removed: ${LABEL[$name]} · in the stack ${#stack[@]} (・_・)"
   else
+    make_room_for "$name"
     stack+=("$name")
     apply
     notify_info "Shader" "Added: ${LABEL[$name]} · in the stack ${#stack[@]} （-＾〇＾-）"
@@ -399,7 +485,7 @@ clear_stack() {
 cmd_effect() {
   load_state
   case "${1:-}" in
-    push | add) push_effect "${2:?effect name required}" ;;
+    push) push_effect "${2:?effect name required}" ;;
     set) set_single "${2:?effect name required}" ;;
     toggle | off-or) toggle_effect "${2:?effect name required}" ;;
     clear | off | none) clear_stack ;;
@@ -470,16 +556,22 @@ cmd_flash() {
   load_state
   [[ -n "$keep" && ${#stack[@]} -gt 0 ]] && exit 0
 
-  # The flash body first (usually samples the texture itself — glitch/wave); from
-  # the stack we take into the chain only color ones (not sampling the texture) —
-  # otherwise they'd overwrite the flash result (a proper composition of several
-  # geometries needs multi-pass rendering, and Hyprland has one slot)
-  local bodies=("$SHADER_DIR/$name.frag") e
-  for e in "${stack[@]}"; do
-    samples_texture "$e" || bodies+=("$SHADER_DIR/$e.frag")
-  done
   local file="$RUNTIME_DIR/flash.frag"
-  emit_shader "$file" "${bodies[@]}"
+  if is_raw "$name"; then
+    # Nothing to compose with — the raw shader is the whole frame for its second
+    frag_body "${FILE[$name]}" >"$file"
+  else
+    # The flash body first (usually samples the texture itself — glitch/wave); from
+    # the stack we take into the chain only color ones (not sampling the texture) —
+    # otherwise they'd overwrite the flash result (a proper composition of several
+    # geometries needs multi-pass rendering, and Hyprland has one slot)
+    local bodies=("${FILE[$name]}") e
+    for e in "${stack[@]}"; do
+      is_raw "$e" && continue
+      samples_texture "$e" || bodies+=("${FILE[$e]}")
+    done
+    emit_shader "$file" "${bodies[@]}"
+  fi
 
   # Render mode over the whole pair (flash + stack)
   set_render_mode "$(render_mode_for "$name" "${stack[@]}")"
@@ -540,6 +632,152 @@ cmd_menu() {
   done
 }
 
+# Install an effect into the writable directory. The flags are written as header lines
+# ON TOP of the file, and the same keys are dropped from the copy below — so a shader
+# that knows nothing about this manager still lands with the header it needs, and one
+# that carries its own keeps whatever the flags do not override
+cmd_add() {
+  local src="" name="" force="" k
+  local -A given=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name)
+        name="${2:?--name needs a value}"
+        shift 2
+        ;;
+      --label | --emoji | --order)
+        given["${1#--}"]="${2:?$1 needs a value}"
+        shift 2
+        ;;
+      --animated | --samples | --raw)
+        given["${1#--}"]="yes"
+        shift
+        ;;
+      --no-animated | --no-samples | --no-raw)
+        given["${1#--no-}"]="no"
+        shift
+        ;;
+      -f | --force)
+        force=1
+        shift
+        ;;
+      -*)
+        notify_error "Unknown flag: $1"
+        exit 1
+        ;;
+      *)
+        src="$1"
+        shift
+        ;;
+    esac
+  done
+
+  [[ -n "$src" ]] || {
+    notify_error "Usage: add <file.frag> [--name n] [--label L] [--emoji E] [--order N] [--animated] [--samples] [--raw] [-f]"
+    exit 1
+  }
+  [[ -f "$src" ]] || {
+    notify_error "No such file: $src"
+    exit 1
+  }
+
+  name="${name:-$(basename "$src" .frag)}"
+  [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || {
+    notify_error "Bad effect name: $name (letters, digits, - and _)"
+    exit 1
+  }
+
+  # The one time the GLSL is looked at: a mismatch here is worth catching now rather
+  # than as a screen that quietly does not change
+  local raw="${given[raw]:-}"
+  if [[ -z "$raw" ]]; then
+    if grep -qiE '^[[:space:]]*//[[:space:]]*raw[[:space:]]*:[[:space:]]*(yes|true|on|1)[[:space:]]*$' "$src"; then
+      raw="yes"
+    else
+      raw="no"
+    fi
+  fi
+  if [[ "$raw" == "yes" ]]; then
+    grep -qE '(^|[^A-Za-z0-9_])main[[:space:]]*\(' "$src" || {
+      notify_error "--raw expects a standalone shader with its own main(); $src has none"
+      exit 1
+    }
+  else
+    if grep -qE '(^|[^A-Za-z0-9_])main[[:space:]]*\(' "$src"; then
+      notify_error "$src defines main(): add it with --raw, or rewrite it as vec3 effect(vec3 c, vec2 uv)"
+      exit 1
+    fi
+    grep -qE 'vec3[[:space:]]+effect[[:space:]]*\(' "$src" || {
+      notify_error "$src has no vec3 effect(vec3 c, vec2 uv) — that function is the entry point"
+      exit 1
+    }
+  fi
+
+  local target="$USER_DIR/$name.frag"
+  if [[ -e "$target" && -z "$force" ]]; then
+    notify_error "Already added: $name — pass -f to replace it"
+    exit 1
+  fi
+
+  mkdir -p "$USER_DIR"
+  local tmp="$target.tmp.$$"
+  {
+    # Fixed key order, so the same flags always produce the same file
+    for k in label emoji order animated samples raw; do
+      [[ -n "${given[$k]:-}" ]] && printf '// %s: %s\n' "$k" "${given[$k]}"
+    done
+    if [[ ${#given[@]} -gt 0 ]]; then
+      local drop=""
+      for k in "${!given[@]}"; do drop+="${drop:+|}$k"; done
+      sed -E "/^[[:space:]]*\/\/[[:space:]]*($drop)[[:space:]]*:/d" "$src"
+    else
+      cat "$src"
+    fi
+  } >"$tmp"
+  mv -f "$tmp" "$target"
+
+  local shadowed=""
+  [[ -f "$SHADER_DIR/$name.frag" ]] && shadowed=" · replaces the installed one"
+  notify_info "Shader" "Added: $name$shadowed （-＾〇＾-）"
+  printf '%s\n' "$target"
+}
+
+# Drop an added effect. Only the writable directory is ours to delete from — an
+# installed effect comes with the package, and removing its runtime copy just uncovers it
+cmd_remove() {
+  local name="${1:?effect name required}"
+  local target="$USER_DIR/$name.frag"
+  if [[ ! -f "$target" ]]; then
+    if [[ -n "${FILE[$name]:-}" ]]; then
+      notify_error "$name comes with the package, it was not added at runtime"
+    else
+      notify_error "Unknown effect: $name"
+    fi
+    exit 1
+  fi
+  rm -f "$target"
+
+  EFFECTS=()
+  unset EMOJI LABEL ANIMATED SAMPLES RAW FILE
+  declare -gA EMOJI LABEL ANIMATED SAMPLES RAW FILE
+  load_effects
+
+  # An effect that is gone for good must leave the stack too, or the next apply
+  # looks for a file that is not there
+  load_state
+  if [[ -z "${FILE[$name]:-}" ]] && in_list "$name" "${stack[@]}"; then
+    local e new=()
+    for e in "${stack[@]}"; do [[ "$e" == "$name" ]] || new+=("$e"); done
+    stack=("${new[@]}")
+    apply
+  fi
+  if [[ -n "${FILE[$name]:-}" ]]; then
+    notify_info "Shader" "Removed the added $name · the installed one is back (・_・)"
+  else
+    notify_info "Shader" "Removed: $name (・_・)"
+  fi
+}
+
 # Full reset: effects + brightness in one apply (for waybar RMB)
 cmd_reset_all() {
   load_state
@@ -572,13 +810,21 @@ case "${1:-}" in
     shift
     cmd_flash "$@"
     ;;
+  add)
+    shift
+    cmd_add "$@"
+    ;;
+  remove | rm)
+    shift
+    cmd_remove "$@"
+    ;;
   restore) cmd_restore ;;
   reset-all) cmd_reset_all ;;
   status) cmd_status ;;
   menu) cmd_menu ;;
   *)
     usage >&2
-    notify_error "Usage: screen-shader effect|bright|flash|reset-all|restore|status|menu|help"
+    notify_error "Usage: screen-shader effect|bright|flash|add|remove|reset-all|restore|status|menu|help"
     exit 1
     ;;
 esac

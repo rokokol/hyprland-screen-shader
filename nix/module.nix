@@ -35,10 +35,15 @@ in
       default = { };
       example = lib.literalExpression "{ bloom = ./bloom.frag; }";
       description = ''
-        Effects merged into the shader directory, keyed by effect name. Give a .frag
-        path or the GLSL itself — one function `vec3 effect(vec3 c, vec2 uv)` under a
-        `// label:` / `// emoji:` / `// order:` header. A name that already exists
-        replaces the shipped effect
+        Effects merged into the installed shader directory, keyed by effect name. Give
+        a .frag path or the GLSL itself — one function `vec3 effect(vec3 c, vec2 uv)`
+        under a `// label:` / `// emoji:` / `// order:` header, plus `// animated:`,
+        `// samples:` and `// raw:` where they apply. A name that already exists
+        replaces the shipped effect.
+
+        This is the declarative half. Its counterpart is `screen-shader add`, which
+        writes to $XDG_DATA_HOME/screen-shader/shaders at runtime and wins on a name
+        collision — that directory is user data and a rebuild does not touch it
       '';
     };
 
