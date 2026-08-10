@@ -15,8 +15,16 @@ MODI="${SCREEN_SHADER_MODI:-$(dirname "$SELF")/shader-modi.sh}"
 # One synchronous tag for everything: holding the brightness key updates a single popup
 # instead of pushing a queue of them into the feed
 notify() { # $1 = urgency, $2 = title, $3 = body
+  local body="$3"
+  # mako and most other daemons parse the body as Pango markup, and ours carries effect
+  # labels and file paths — one stray & or < and the message never renders. Ampersand
+  # first, or the later escapes get escaped too; and \& in the replacement because a bare
+  # one means "whatever matched" since bash 5.2
+  body="${body//&/\&amp;}"
+  body="${body//</\&lt;}"
+  body="${body//>/\&gt;}"
   if command -v notify-send >/dev/null 2>&1; then
-    notify-send -u "$1" -h string:x-canonical-private-synchronous:screen-shader "$2" "$3"
+    notify-send -u "$1" -h string:x-canonical-private-synchronous:screen-shader "$2" "$body"
   else
     printf '%s\n' "$3" >&2
   fi

@@ -548,7 +548,9 @@ set_single() {
   require_effect "$name"
   # The stack is being replaced outright, so what a raw effect suspended is not coming
   # back — but the brightness it took away has to, or dimming vanishes without a word
-  raw_active && ! is_raw "$name" && resume_suspended
+  if raw_active && ! is_raw "$name"; then
+    resume_suspended
+  fi
   stack=("$name")
   apply
   say "Effect: ${LABEL[$name]} （-＾〇＾-）"
@@ -591,7 +593,9 @@ toggle_effect() {
 clear_stack() {
   # Clear means clear: the suspended stack goes too, and only the brightness it was
   # holding survives — that one was never the raw effect's to take
-  raw_active && resume_suspended
+  if raw_active; then
+    resume_suspended
+  fi
   stack=()
   suspended=()
   suspended_bright="1.00"
