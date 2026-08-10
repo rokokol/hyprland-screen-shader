@@ -22,6 +22,10 @@
         name = "rofi-shader.sh";
         path = ./rofi-shader.sh;
       };
+      modi = builtins.path {
+        name = "shader-modi.sh";
+        path = ./shader-modi.sh;
+      };
       installer = builtins.path {
         name = "install.sh";
         path = ./install.sh;
@@ -68,6 +72,7 @@
                 mkdir -p repo
                 cp ${manager} repo/screen-shader.sh
                 cp ${picker} repo/rofi-shader.sh
+                cp ${modi} repo/shader-modi.sh
                 cp -r ${shaderDir} repo/shaders
                 cp -r ${testsDir} repo/tests
                 chmod -R +w repo
@@ -107,6 +112,24 @@
                 for n in $names; do check "$n"; done
                 # shellcheck disable=SC2086
                 check $names
+
+                # A raw effect never joins the chain above, so it needs its own pass:
+                # it goes to the slot whole, and a broken one would show as a screen
+                # that quietly does not change
+                mkdir -p added
+                printf '%s\n' '// label: Probe' '// raw: yes' '#version 300 es' \
+                  'precision highp float;' 'in vec2 v_texcoord;' 'uniform sampler2D tex;' \
+                  'out vec4 fragColor;' 'void main() { fragColor = texture(tex, v_texcoord); }' \
+                  >added/probe.frag
+                export SCREEN_SHADER_USER_DIR=$PWD/added
+                check probe
+                # …and beside a stack it takes the slot alone rather than emitting a
+                # main() that calls an effect() nobody defined
+                printf 'stack=(probe sepia)\nbright=0.80\nslot=0\n' >"$SCREEN_SHADER_STATE"
+                screen-shader restore
+                for f in "$XDG_RUNTIME_DIR"/screen-shader/active-*.frag; do
+                  glslangValidator -S frag "$f" || { echo "^ failed for a raw effect beside a stack"; exit 1; }
+                done
                 touch $out
               '';
 
@@ -119,6 +142,16 @@
                 grep -qE "^//[[:space:]]*$key:" "$f" ||
                   { echo "$(basename "$f"): missing '// $key:' header"; exit 1; }
               done
+              # A shipped effect is a body, not a whole shader — and the two are told
+              # apart by "// raw:", which only "add" checks against the GLSL. Here the
+              # declaration and the code have to agree in both directions
+              if grep -qE '(^|[^A-Za-z0-9_])main[[:space:]]*\(' "$f"; then
+                grep -qiE "^//[[:space:]]*raw:[[:space:]]*(yes|true|on|1)" "$f" ||
+                  { echo "$(basename "$f"): defines main() without declaring '// raw: yes'"; exit 1; }
+              elif grep -qiE "^//[[:space:]]*raw:[[:space:]]*(yes|true|on|1)" "$f"; then
+                echo "$(basename "$f"): declares '// raw: yes' but has no main()"
+                exit 1
+              fi
             done
             touch $out
           '';
@@ -177,7 +210,11 @@
                 screen-shader help | grep SCREEN_SHADER_DIR >/dev/null
                 screen-shader status | grep '"class":"off"' >/dev/null
                 # The picker must name its own rofi mode, without anything in rofi.rasi
-                ROFI_RETV=0 rofi-shader | tr '\000\037' '@|' | grep -F '@prompt|📺' >/dev/null
+                # The modi must name its own rofi mode, without anything in rofi.rasi
+                ROFI_RETV=0 ${screen-shader}/libexec/shader-modi | tr '\000\037' '@|' |
+                  grep -F '@prompt|📺' >/dev/null
+                # …and the UI layer passes machine output through while it is at it
+                test "$(rofi-shader bright get)" = 100
                 touch $out
               '';
 
@@ -198,10 +235,10 @@
               ''
                 want() { jq -e "$1" "$dumpPath" >/dev/null || { echo "module wiring: $2"; exit 1; }; }
 
-                want '.hyprland.bind | any(test("bin/rofi-shader"))' "the picker is not bound"
-                want '.hyprland.bind | any(test("SUPER, G, exec, .*effect clear"))' "clearing is not bound"
-                want '.hyprland.bindel | length == 2' "brightness is not held-repeatable"
                 want '.hyprland.exec | any(test("bin/screen-shader restore"))' "the shader is not restored on reload"
+                # Keys are the user's; the module has no business in anyone's keymap
+                want '.hyprland | has("bind") | not' "the module binds keys again"
+                want '.hyprland | has("bindel") | not' "the module binds keys again"
                 want '.waybar.mainBar["custom/shader"].signal == 8' "the indicator got no signal number"
                 want '.waybar.mainBar["custom/shader"]["on-click"] | test("bin/rofi-shader")' "clicking the indicator opens nothing"
                 want '.package | test("screen-shader")' "no package installed"
@@ -209,6 +246,7 @@
                 # …and none of it leaks into a config that did not ask for it
                 want '.bareHyprland == {}' "binds appear without Hyprland"
                 want '.bareWaybar == {}' "a bar is touched without being named"
+                want '.barsOnlyWaybar == {}' "a named bar is written to without waybar.enable"
                 want '.offPackages == []' "the package is installed while disabled"
                 want '.offHyprland == {}' "binds survive enable = false"
                 touch $out
@@ -223,8 +261,8 @@
                 ];
               }
               ''
-                shellcheck ${manager} ${picker} ${installer} ${testsDir}/run.sh
-                shfmt -d -i 2 -ci ${manager} ${picker} ${installer} ${testsDir}/run.sh
+                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh
+                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh
                 touch $out
               '';
         }

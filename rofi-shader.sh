@@ -1,49 +1,46 @@
 #!/usr/bin/env bash
 
+# The UI layer, and the only executable meant for a keybinding, a bar or a shell. Two
+# jobs: open the picker, and put a popup on what screen-shader has to say. The manager
+# writes plain text to stderr and knows nothing about notification daemons
 set -euo pipefail
 
-# Outside rofi it's a launcher: run rofi with this same script as the "shader" modi
-if [[ -z "${ROFI_RETV:-}" ]]; then
-  exec rofi -show shader -modi "shader:$0" -mesg "Full-screen effect"
-fi
-
-# Resolve through symlinks so a link on PATH still finds its neighbour
+MODE="shader"
+# Both fall back to a sibling of this script, which is where a plain install puts them;
+# under Nix the wrapper sets them to absolute store paths
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SS="${SCREEN_SHADER:-$(dirname "$SELF")/screen-shader.sh}"
+MODI="${SCREEN_SHADER_MODI:-$(dirname "$SELF")/shader-modi.sh}"
 
-# Service values of the brightness buttons (not effects) — handled separately
-BRIGHT_UP="__bright_up__"
-BRIGHT_DOWN="__bright_down__"
+# One synchronous tag for everything: holding the brightness key updates a single popup
+# instead of pushing a queue of them into the feed
+notify() { # $1 = urgency, $2 = title, $3 = body
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -u "$1" -h string:x-canonical-private-synchronous:screen-shader "$2" "$3"
+  else
+    printf '%s\n' "$3" >&2
+  fi
+}
 
-# Selection via ROFI_INFO: brightness buttons adjust soft brightness; effects toggle in/out of the stack
-# No exec — reprint the list so rofi stays open; "Normal" clears all, Escape closes
-if [[ -n "${ROFI_INFO:-}" ]]; then
-  case "$ROFI_INFO" in
-    "$BRIGHT_UP") "$SS" bright up ;;
-    "$BRIGHT_DOWN") "$SS" bright down ;;
-    *) "$SS" effect toggle "$ROFI_INFO" ;;
-  esac
+# Without arguments it is the picker; with them it is screen-shader with a popup on top
+if [[ $# -eq 0 ]]; then
+  exec rofi -show "$MODE" -modi "$MODE:$MODI" -mesg "Full-screen effect"
 fi
 
-# keep-selection: after applying an item rofi redraws the list — without this the
-# cursor would jump to the top. With the option the position is kept, so you can
-# click effects/brightness in a row without scrolling again (rofi >= 1.7)
-printf '\0keep-selection\x1ftrue\n'
-# The mode name, set through the script protocol. NOT -display-shader: rofi registers
-# that option only for its built-in modes, so for a script modi it is silently ignored
-# and the raw mode name shows instead. This way nothing has to be declared in rofi.rasi
-printf '\0prompt\x1f%s\n' "${ROFI_SHADER_PROMPT:-📺}"
-# The current soft-brightness level goes into the message above the list, updated on every click
-printf '\0message\x1fFull-screen effect · brightness %s%%\n' "$("$SS" bright get)"
+# stdout is passed through untouched, so "rofi-shader bright get" is still a number and
+# "rofi-shader menu" is still a list; only stderr is turned into a popup
+exec 3>&1
+set +e
+msg=$("$SS" "$@" 2>&1 1>&3 3>&-)
+rc=$?
+set -e
+exec 3>&-
 
-# Print the effects: visible label + hidden value (info). Active ones are marked
-# with an apply number (01. 02. …) — see cmd_menu in screen-shader.sh. Right after
-# "Normal" (reset) we insert the soft-brightness buttons — different emojis
-# (🌕 brighter / 🌑 darker) for clarity; together with keep-selection it's handy to press in a row
-while IFS='|' read -r label value; do
-  printf '%s\0info\x1f%s\n' "$label" "$value"
-  if [[ "$value" == "none" ]]; then
-    printf '🌕 Brightness +\0info\x1f%s\n' "$BRIGHT_UP"
-    printf '🌑 Brightness −\0info\x1f%s\n' "$BRIGHT_DOWN"
+if [[ -n "$msg" ]]; then
+  if ((rc)); then
+    notify critical "Shader error (╯°□°）╯︵ ┻━┻" "$msg"
+  else
+    notify low "Shader" "$msg"
   fi
-done < <("$SS" menu)
+fi
+exit "$rc"

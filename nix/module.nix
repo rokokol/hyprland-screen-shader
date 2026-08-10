@@ -1,6 +1,6 @@
-# Home Manager module. Enabling it is meant to be enough: the keys are bound, the
-# picker knows its own rofi modi, and the waybar module is defined. Where the
-# indicator sits in the bar stays the user's call — that one nobody can guess
+# Home Manager module. It installs the package, re-applies the shader on every Hyprland
+# reload, and defines the waybar module for the bars that ask for it. The keys are yours
+# to bind — `rofi-shader` and `screen-shader …` are whole commands
 { self }:
 {
   config,
@@ -13,7 +13,6 @@ let
   cfg = config.programs.screen-shader;
   exe = lib.getExe cfg.package;
   picker = "${cfg.package}/bin/rofi-shader";
-  mod = cfg.hyprland.modifier;
 in
 {
   options.programs.screen-shader = {
@@ -58,6 +57,16 @@ in
     };
 
     waybar = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Define the `custom/shader` module in the bars listed below. Off by default and
+          declared rather than guessed from an empty `bars` list — a module that writes
+          into someone else's bar should be asked for
+        '';
+      };
+
       signal = lib.mkOption {
         type = lib.types.nullOr lib.types.int;
         default = null;
@@ -83,13 +92,16 @@ in
       module = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         readOnly = true;
+        # A popup belongs where nothing else answers. The clicks change a lot at once
+        # and go through the UI layer; scrolling does not, because the number moving
+        # under the cursor is the answer
         default = {
           exec = "${exe} status";
           return-type = "json";
           format = "{}";
           on-click = picker;
-          on-click-right = "${exe} reset-all";
-          on-click-middle = "${exe} bright toggle";
+          on-click-right = "${picker} reset-all";
+          on-click-middle = "${picker} bright toggle";
           on-scroll-up = "${exe} bright up";
           on-scroll-down = "${exe} bright down";
         }
@@ -103,39 +115,22 @@ in
         type = lib.types.bool;
         default = config.wayland.windowManager.hyprland.enable;
         defaultText = lib.literalExpression "config.wayland.windowManager.hyprland.enable";
-        description = "Bind the keys and re-apply the shader on every Hyprland reload";
-      };
-
-      modifier = lib.mkOption {
-        type = lib.types.str;
-        default = "SUPER";
-        description = ''
-          Modifier for the default bindings, spelled out rather than taken from a
-          hyprland variable — these lines are emitted before your own config is sourced,
-          so a `$mainMod` defined there does not exist yet
-        '';
+        description = "Re-apply the shader on every Hyprland reload";
       };
 
       settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {
-          bind = [
-            "${mod}, G, exec, ${exe} effect clear"
-            "${mod} SHIFT, G, exec, ${picker}"
-            "${mod} CTRL, BackSpace, exec, ${exe} bright reset"
-          ];
-          # bindel repeats while the key is held, which is what makes dimming feel continuous
-          bindel = [
-            "${mod} CTRL, bracketright, exec, ${exe} bright up"
-            "${mod} CTRL, bracketleft, exec, ${exe} bright down"
-          ];
-          # exec, not exec-once: the shader slot is runtime state and is lost on every reload
+          # exec, not exec-once: the shader slot is runtime state and is lost on every
+          # reload. This is the one line the module still writes into your Hyprland
+          # config, because it is not a taste — without it an active effect quietly
+          # falls off. Keys are yours, see the README
           exec = [ "${exe} restore" ];
         };
-        defaultText = lib.literalExpression "the bindings listed in the README";
+        defaultText = lib.literalExpression ''{ exec = [ "screen-shader restore" ]; }'';
         description = ''
-          Merged into `wayland.windowManager.hyprland.settings`. Set to `{ }` to bind
-          everything yourself
+          Merged into `wayland.windowManager.hyprland.settings`. Set to `{ }` to write
+          even that line yourself
         '';
       };
     };
@@ -149,11 +144,11 @@ in
         wayland.windowManager.hyprland.settings = cfg.hyprland.settings;
       })
 
-      {
+      (lib.mkIf cfg.waybar.enable {
         programs.waybar.settings = lib.genAttrs cfg.waybar.bars (_: {
           "custom/shader" = cfg.waybar.module;
         });
-      }
+      })
     ]
   );
 }

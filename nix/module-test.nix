@@ -50,6 +50,7 @@ let
       enable = true;
       rofi.prompt = "🎬";
       waybar = {
+        enable = true;
         signal = 8;
         bars = [ "mainBar" ];
       };
@@ -57,6 +58,14 @@ let
   };
 
   bare = eval { programs.screen-shader.enable = true; };
+
+  # Naming a bar is not the same as asking for the module to be defined in it
+  barsOnly = eval {
+    programs.screen-shader = {
+      enable = true;
+      waybar.bars = [ "mainBar" ];
+    };
+  };
 
   off = eval { programs.screen-shader.enable = false; };
 in
@@ -69,6 +78,7 @@ in
 
   bareHyprland = bare.wayland.windowManager.hyprland.settings;
   bareWaybar = bare.programs.waybar.settings;
+  barsOnlyWaybar = barsOnly.programs.waybar.settings;
 
   offPackages = off.home.packages;
   offHyprland = off.wayland.windowManager.hyprland.settings;

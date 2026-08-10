@@ -1,7 +1,7 @@
-# screen-shader plus its effects. The scripts self-locate their shaders/ directory,
-# so this only has to point SCREEN_SHADER_DIR at the store copy and put the runtime
-# tools on PATH. hyprctl and rofi are deliberately NOT runtime inputs: both come from
-# the running session, and pinning a second rofi here would shadow the user's own
+# screen-shader plus its effects, the UI layer that opens the picker, and the modi that
+# fills it. This points every one of them at the others by absolute path and puts the
+# runtime tools on PATH. hyprctl and rofi are deliberately NOT runtime inputs: both come
+# from the running session, and pinning a second rofi here would shadow the user's own
 {
   lib,
   stdenvNoCC,
@@ -33,6 +33,10 @@ let
     name = "rofi-shader.sh";
     path = ../rofi-shader.sh;
   };
+  modi = builtins.path {
+    name = "shader-modi.sh";
+    path = ../shader-modi.sh;
+  };
   shaders = builtins.path {
     name = "screen-shader-shaders";
     path = ../shaders;
@@ -46,12 +50,13 @@ let
     waybarSignal != null
   ) ''--set-default WAYBAR_SHADER_SIGNAL "${toString waybarSignal}"'';
 
+  # The manager's own tools. libnotify is deliberately not among them: it belongs to the
+  # UI layer, and the manager only ever writes text to stderr
   runtimeInputs = [
     coreutils
     gawk
     gnugrep
     gnused
-    libnotify
     procps
     util-linux
   ];
@@ -59,7 +64,7 @@ in
 
 stdenvNoCC.mkDerivation {
   pname = "screen-shader";
-  version = "1.0";
+  version = "2.0";
 
   dontUnpack = true;
   nativeBuildInputs = [ makeWrapper ];
@@ -80,15 +85,21 @@ stdenvNoCC.mkDerivation {
 
     install -Dm755 ${script} $out/bin/screen-shader
     install -Dm755 ${picker} $out/bin/rofi-shader
-    patchShebangs $out/bin
+    # libexec, not bin: rofi runs the modi, a human never does
+    install -Dm755 ${modi} $out/libexec/shader-modi
+    patchShebangs $out/bin $out/libexec
 
     # --set-default, not --set: an override from the caller's environment still wins
     wrapProgram $out/bin/screen-shader \
       --prefix PATH : ${lib.makeBinPath runtimeInputs} \
       --set-default SCREEN_SHADER_DIR "$dir" ${signalArg}
     wrapProgram $out/bin/rofi-shader \
+      --prefix PATH : ${lib.makeBinPath (runtimeInputs ++ [ libnotify ])} \
+      --set-default SCREEN_SHADER $out/bin/screen-shader \
+      --set-default SCREEN_SHADER_MODI $out/libexec/shader-modi
+    wrapProgram $out/libexec/shader-modi \
       --prefix PATH : ${lib.makeBinPath runtimeInputs} \
-      --set-default SCREEN_SHADER $out/bin/screen-shader ${promptArg} ${signalArg}
+      --set-default SCREEN_SHADER_UI $out/bin/rofi-shader ${promptArg}
 
     runHook postInstall
   '';

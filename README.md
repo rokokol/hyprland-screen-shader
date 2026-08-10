@@ -6,6 +6,7 @@
 
 ![Hyprland](https://img.shields.io/badge/Hyprland-58E1FF?style=flat&logo=hyprland&logoColor=black)
 ![GLSL](https://img.shields.io/badge/GLSL-ES_3.0-5586A4?style=flat&logo=opengl&logoColor=white)
+![Bash](https://img.shields.io/badge/Bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 ![Nix](https://img.shields.io/badge/Nix-flake-7EBAE4?style=flat&logo=nixos&logoColor=white)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
 [![build](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/build.yml)
@@ -51,6 +52,7 @@ They **stack**. `effect push` adds a filter over the current ones, `effect toggl
   programs.screen-shader = {
     enable = true;
     waybar = {
+      enable = true;
       signal = 8;
       bars = [ "mainBar" ];
     };
@@ -58,16 +60,25 @@ They **stack**. `effect push` adds a filter over the current ones, `effect toggl
 }
 ```
 
-That is the whole setup. Enabling it installs the package, binds the keys, points the picker at itself as a rofi modi, and defines a `custom/shader` module in the named bars. The one thing left to you is *where* the indicator sits — add `"custom/shader"` to that bar's `modules-right` (or left, or centre; nobody can guess that one)
+Enabling it installs the package, defines a `custom/shader` module in the named bars, and writes exactly one line into your Hyprland config — `exec = screen-shader restore`. That line is not a taste: the shader slot is runtime state and is lost on every reload, so without it an active effect quietly falls off.
 
-| key | does |
-| --- | --- |
-| `SUPER SHIFT + G` | the picker — every effect, plus brightness buttons |
-| `SUPER + G` | clear the stack |
-| `SUPER CTRL + ]` / `[` | brightness ±5%, repeats while held |
-| `SUPER CTRL + Backspace` | brightness back to 100% |
+Keys are yours, because a binding *is* a taste and belongs in your own config:
 
-Change `hyprland.modifier`, or replace `hyprland.settings` wholesale, or set it to `{ }` and bind everything yourself
+```conf
+bind   = SUPER SHIFT, G, exec, rofi-shader
+bind   = SUPER, G, exec, screen-shader effect clear
+bind   = SUPER CTRL, BackSpace, exec, rofi-shader bright reset
+bindel = SUPER CTRL, bracketright, exec, rofi-shader bright up
+bindel = SUPER CTRL, bracketleft, exec, rofi-shader bright down
+```
+
+`bindel` repeats while the key is held, which is what makes dimming feel continuous. Where the indicator sits is yours too — add `"custom/shader"` to that bar's `modules-right` (or left, or centre; nobody can guess that one)
+
+### Two commands, and who notifies
+
+`screen-shader` is the manager: it writes machine output to stdout, messages for a human to stderr, and never talks to a notification daemon. `rofi-shader` is the UI layer above it — with no arguments it opens the picker, with arguments it runs the manager and turns whatever it said into a popup. So bind `rofi-shader bright up` where you want a popup and `screen-shader bright up` where something else already answers, which is why the waybar module scrolls through the manager directly: the number under the cursor is the answer.
+
+The picker's modi is a third script, `shader-modi`, installed to `libexec` and off PATH — rofi runs it, nobody types it.
 
 ### Any other distribution
 
@@ -79,17 +90,12 @@ sudo ./install.sh          # PREFIX=~/.local ./install.sh for a user install
 
 Nothing is built: the scripts and the effects are copied to `$PREFIX/share/screen-shader` and symlinked into `$PREFIX/bin`. They resolve their own location through the symlink, so the effects are found without any generated path
 
-Needs `bash`, `awk`, `sed`, `grep`, `flock`, `hyprctl`, and — for the picker — `rofi`. `notify-send` is optional; without it the messages go to stderr
+Needs `bash`, `awk`, `sed`, `grep`, `flock`, `hyprctl`, and — for the picker — `rofi`. `notify-send` is optional; without it `rofi-shader` prints the messages to stderr instead
 
-Then bind the keys yourself:
+Then bind the keys yourself, same block as above, plus the one line the Home Manager module would have written:
 
 ```conf
-bind  = SUPER SHIFT, G, exec, rofi-shader
-bind  = SUPER, G, exec, screen-shader effect clear
-bindel = SUPER CTRL, bracketright, exec, screen-shader bright up
-bindel = SUPER CTRL, bracketleft, exec, screen-shader bright down
-bind  = SUPER CTRL, BackSpace, exec, screen-shader bright reset
-exec  = screen-shader restore
+exec = screen-shader restore
 ```
 
 `exec`, not `exec-once`: the shader slot is runtime state, so it has to be re-applied on every reload
@@ -106,6 +112,9 @@ screen-shader restore                       # re-apply the saved choice
 screen-shader reset-all                     # effects and brightness in one go
 screen-shader status                        # JSON for a waybar custom module
 screen-shader menu                          # "<emoji> <label>|<name>" for the picker
+
+rofi-shader                                 # the picker
+rofi-shader <any of the above>              # …and the same, with a popup on what it said
 ```
 
 `flash` is for something else's use: it composites an effect over whatever is on for a second or so and puts it back, without touching durable state. `-k` makes it a no-op when the stack is already busy, so it never fights a deliberate choice
@@ -147,6 +156,8 @@ What you get for free — do **not** declare any of it yourself:
 | `BRIGHTNESS` | the current soft-brightness multiplier |
 
 Do not write `#version`, `precision`, `in`/`out`/`uniform` declarations or `main()` — the manager emits all of them, and a second copy is a compile error. Helper functions and constants at file scope are fine and may share names with other effects: when several are composed, the later bodies are renamed (`hash` → `hash_1`).
+
+All of that is about a composable effect. A **raw** shader (`// raw: yes`, below) is the other kind: it declares its own uniforms and gets none of the table above, `BRIGHTNESS` included.
 
 The file name is the effect's name: `bloom.frag` gives `screen-shader effect push bloom`.
 
@@ -190,9 +201,23 @@ An ordinary Hyprland screen shader — its own `#version`, `main()`, writing `fr
 screen-shader add ~/blue-light.frag --raw --label "Blue light" --emoji 🔵 --order 45
 ```
 
-It is handed to Hyprland exactly as written, header lines aside. The honest cost is that it **owns the frame**: it brings its own `main()`, so nothing composes with it. Selecting it clears the stack, selecting anything else drops it, and soft brightness has no place to multiply — there is no generated `main()` to put the multiply in.
+`--raw` is the flag; `// raw: yes` is the same thing as a header line, and the only way to declare it for an effect that arrives through `extraShaders` rather than through `add`. Either way the file is handed to Hyprland exactly as written, header lines aside.
 
-Without `--raw`, a file defining `main()` is refused with that explanation rather than silently producing a shader that never compiles.
+The honest cost is that it **owns the frame**: it brings its own `main()`, so nothing composes with it, and soft brightness has no place to multiply — there is no generated `main()` to put the multiply in.
+
+What it does **not** cost is your stack. Taking the slot **suspends** the composition instead of destroying it:
+
+| | |
+| --- | --- |
+| picking a raw effect | the stack and the brightness step aside and wait; the picker keeps showing them, in brackets: `(01.) 📺 CRT` |
+| picking it again, or any other effect | they come back, and the effect you picked lands on top |
+| `effect set` / `next` / `prev` | the stack is replaced outright, as asked — but the suspended brightness still returns, or dimming would vanish without a word |
+| `effect clear` / `reset-all` | clear means clear: the suspended stack goes too |
+| `bright` while it is on | refused, with a line saying why. Recording a number that never reaches the screen is worse than saying no — that was the old behaviour, and the dimming used to land at the moment you took the effect *off* |
+
+The rest of the header is orthogonal to `raw:`: a raw shader still declares `animated:` and `samples:`, and they still set the render mode. Only the *chain* is unavailable to it — `samples: yes` no longer means "first in line", because there is no line.
+
+Without `--raw`, a file defining `main()` is refused with that explanation rather than silently producing a shader that never compiles. `nix flake check` holds the shipped effects to the same rule, in both directions.
 
 ### Checking it works
 
@@ -219,19 +244,19 @@ Hyprland has to be told how hard to redraw, and that comes from the `animated:` 
 | offset | `samples: yes` | `1` / `1` | offset sampling reads neighbouring areas, which precise damage has not drawn yet — redraw the whole monitor, but still sleep when idle |
 | plain | neither | `2` / `1` | per-pixel, partial damage is fine |
 
-`samples: yes` also puts the effect **first** in the chain, ahead of the colour filters — geometry happens once, colour grades the result.
+`samples: yes` also puts the effect **first** in the chain, ahead of the colour filters — geometry happens once, colour grades the result. A raw shader has no chain, but both keys still apply to it: it is one shader, and Hyprland still has to be told how hard to redraw for it.
 
 Get it wrong upwards and you spend redraws; downwards is what you actually notice — an animation that stands still, or distortion that smears over undamaged screen. So `nix flake check` verifies the `animated` half against the compiler: reflection lists only the uniforms a shader really uses, so an effect whose `time` survives compilation and does not say `animated: yes` fails the build.
 
 ## Waybar
 
-`waybar.bars` defines the module; place it where you want it:
+`waybar.enable` turns the integration on and `waybar.bars` says which bars get the module; place it where you want it:
 
 ```nix
 programs.waybar.settings.mainBar.modules-right = [ "custom/shader" "clock" ];
 ```
 
-Left click opens the picker, right click resets everything, middle click halves the brightness, scroll adjusts it. The module hides itself when no effect is on and brightness is 100%
+Left click opens the picker, right click resets everything, middle click halves the brightness, scroll adjusts it. The clicks go through `rofi-shader` and say what they did; scrolling goes straight to the manager and says nothing, because the number changing under the cursor is already the answer. The module hides itself when no effect is on and brightness is 100%
 
 The indicator refreshes on `SIGRTMIN+N`, with `N` from `waybar.signal` — declared once and baked into the package, so the script and the bar cannot disagree. **The default action of an RT signal is to terminate the process**, so it must never be sent before waybar has installed its handler; `screen-shader restore` deliberately sends nothing for that reason, and at session start waybar reads `status` itself anyway
 
@@ -248,7 +273,8 @@ tests/run.sh --update     # re-record the golden shaders after a deliberate chan
 
 ```
 screen-shader.sh   the manager: state, shader assembly, render modes, indicator
-rofi-shader.sh     the picker, a rofi script-modi that also launches itself
+rofi-shader.sh     the UI layer: opens the picker, or runs the manager and notifies
+shader-modi.sh     the picker itself, a rofi script-modi kept off PATH
 shaders/*.frag     one effect per file
 nix/               package.nix, module.nix, module-test.nix
 tests/             run.sh and the golden shaders

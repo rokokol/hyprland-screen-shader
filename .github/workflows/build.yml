@@ -21,6 +21,8 @@ jobs:
         run: |
           PREFIX=$PWD/out ./install.sh
           test -L out/bin/screen-shader
+          test -L out/bin/rofi-shader
+          test ! -e out/bin/shader-modi
           out/bin/screen-shader menu | grep -xF '⚫ Grayscale|grayscale' >/dev/null
           SCREEN_SHADER=$PWD/out/bin/screen-shader ./tests/run.sh
       - run: nix fmt -- --ci
@@ -30,5 +32,5 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
-      - run: nix run nixpkgs#shellcheck -- install.sh screen-shader.sh rofi-shader.sh tests/run.sh
-      - run: nix run nixpkgs#shfmt -- -d -i 2 -ci install.sh screen-shader.sh rofi-shader.sh tests/run.sh
+      - run: nix run nixpkgs#shellcheck -- install.sh screen-shader.sh rofi-shader.sh shader-modi.sh tests/run.sh
+      - run: nix run nixpkgs#shfmt -- -d -i 2 -ci install.sh screen-shader.sh rofi-shader.sh shader-modi.sh tests/run.sh

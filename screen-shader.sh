@@ -33,7 +33,8 @@ Commands:
   reset-all               drop effects and brightness in one apply
   status                  JSON for a waybar custom module
   menu                    "<emoji> <label>|<name>" lines for the rofi picker
-                          (active ones marked with an apply number: 01. 02. 03.)
+                          (active ones marked with an apply number: 01. 02. 03.;
+                          a raw one with "raw."; suspended ones with "(01.)")
   help                    this help
 
 Effects STACK: every `effect push` adds a filter over the previous ones (the rofi
@@ -58,7 +59,15 @@ Three more header keys, all "no" unless declared:
                      also lead the chain, ahead of the colour filters
 "// raw: yes"      — a standalone shader with its own #version and main(), handed to
                      Hyprland as it is. It owns the frame, so it runs alone: no stacking
-                     with other effects and no soft brightness over it
+                     with other effects and no soft brightness over it. The stack it
+                     displaces is not lost — it waits, and comes back with its brightness
+                     as soon as the raw effect leaves the slot (clear/reset-all drop it
+                     along with everything else). Orthogonal to the other keys: animated
+                     and samples still say how the frame is redrawn
+
+Messages for a human go to stderr, machine output (status, menu, bright get, the path
+"add" prints) to stdout. Nothing here talks to a notification daemon — rofi-shader is
+the UI layer, and it turns stderr into popups
 
 Environment:
   SCREEN_SHADER_DIR    the installed effects (default: shaders/ next to this script)
@@ -69,15 +78,16 @@ Environment:
 EOF
 }
 
-notify_error() {
-  if command -v notify-send >/dev/null 2>&1; then
-    notify-send -u critical "Shader error (╯°□°）╯︵ ┻━┻" "$1" && return
-  fi
-  printf '%s\n' "$1" >&2
+# Everything a human reads goes to stderr, everything a program parses to stdout. The
+# manager never talks to the notification daemon: rofi-shader is the UI layer, and it
+# turns whatever lands here into a popup
+say() {
+  printf '%s\n' "$*" >&2
 }
 
-notify_info() {
-  command -v notify-send >/dev/null 2>&1 && notify-send -u low "$1" "$2" || true
+die() {
+  say "$@"
+  exit 1
 }
 
 # SHADER_NO_SIGNAL suppresses the signal on restore at session start: the default
@@ -122,8 +132,7 @@ load_effects() {
     found["${name%.frag}"]="$f"
   done
   if [[ ${#found[@]} -eq 0 ]]; then
-    notify_error "No .frag files in $SHADER_DIR"
-    exit 1
+    die "No .frag files in $SHADER_DIR"
   fi
   while IFS='|' read -r name emoji label anim samp raw file; do
     EFFECTS+=("$name")
@@ -171,9 +180,17 @@ bright="1.00"
 # guaranteed to be re-read (otherwise a brightness change with an active stack isn't
 # applied)
 slot=0
+# A raw effect owns the frame alone, so taking the slot puts the composition aside
+# instead of destroying it — these hold it, and the brightness with it, until the raw
+# effect leaves
+suspended=()
+suspended_bright="1.00"
 
 load_state() {
   stack=()
+  # Reset before sourcing: a state file written before suspension existed has neither
+  suspended=()
+  suspended_bright="1.00"
   if [[ -f "$STATE" ]]; then
     # shellcheck disable=SC1090
     source "$STATE"
@@ -188,6 +205,10 @@ save_state() {
     printf ')\n'
     printf 'bright=%s\n' "$bright"
     printf 'slot=%s\n' "$slot"
+    printf 'suspended=('
+    printf '%s ' "${suspended[@]}"
+    printf ')\n'
+    printf 'suspended_bright=%s\n' "$suspended_bright"
   } >"$STATE"
 }
 
@@ -213,12 +234,14 @@ in_list() {
   return 1
 }
 
-# 1-based position of an effect in the stack (apply order) — prints the number and
-# returns 0 if the effect is in the stack; otherwise returns 1 and prints nothing
-stack_position() {
-  local i=1 x
-  for x in "${stack[@]}"; do
-    [[ "$x" == "$1" ]] && {
+# 1-based position of an effect in a list (apply order) — prints the number and returns
+# 0 if it is there; otherwise returns 1 and prints nothing. Asked of both the stack and
+# the suspended one, which the picker shows side by side
+position_in() { # $1 = effect, rest = the list
+  local item="$1" i=1 x
+  shift
+  for x in "$@"; do
+    [[ "$x" == "$item" ]] && {
       printf '%s' "$i"
       return 0
     }
@@ -233,9 +256,82 @@ samples_texture() {
 }
 
 # A standalone shader ("// raw: yes"): it brings its own main(), so it takes the slot
-# whole — nothing composes with it and soft brightness cannot multiply its output
+# whole — nothing composes with it and soft brightness cannot multiply its output.
+# Orthogonal to the other header keys: a raw shader still declares whether it animates
+# and whether it samples, and those still set the render mode
 is_raw() {
   [[ "${RAW[$1]:-0}" == 1 ]]
+}
+
+# Is a raw effect holding the slot right now? Scans the whole stack rather than trusting
+# its length: normalize_stack is what makes it a single entry, and this runs before it
+raw_active() {
+  local e
+  for e in "${stack[@]}"; do
+    is_raw "$e" && return 0
+  done
+  return 1
+}
+
+# The raw effect is done: give back the composition and the brightness it displaced
+resume_suspended() {
+  stack=("${suspended[@]}")
+  bright="$suspended_bright"
+  suspended=()
+  suspended_bright="1.00"
+}
+
+# The one place the "a raw effect owns the frame alone" invariant is enforced, so every
+# path can mutate the stack without thinking about it. Called from apply, which is the
+# only way anything reaches Hyprland — including a state file written by an older
+# version, or an effect that turned raw under a stack it was already in (add -f --raw,
+# extraShaders)
+normalize_stack() {
+  local e keep="" rest=()
+
+  if ! raw_active; then
+    # Nothing owns the frame, so nothing should be waiting for it either
+    if [[ ${#suspended[@]} -gt 0 || "$suspended_bright" != "1.00" ]]; then
+      stack=("${suspended[@]}" "${stack[@]}")
+      bright="$suspended_bright"
+      suspended=()
+      suspended_bright="1.00"
+    fi
+    return 0
+  fi
+
+  for e in "${stack[@]}"; do
+    if is_raw "$e"; then
+      if [[ -z "$keep" ]]; then
+        keep="$e"
+      else
+        say "${LABEL[$e]:-$e} is a raw shader too, and only one can own the frame (・_・)"
+      fi
+    else
+      rest+=("$e")
+    fi
+  done
+
+  # Only when nothing is waiting yet: what is already there is the stack from before
+  # this raw effect, and it outranks anything the current pass picked up
+  if [[ ${#suspended[@]} -eq 0 && "$suspended_bright" == "1.00" ]]; then
+    suspended=("${rest[@]}")
+    suspended_bright="$bright"
+  fi
+  stack=("$keep")
+  bright="1.00"
+}
+
+# A raw effect steps aside for anything else: what it displaced comes back before the
+# new effect is decided against the stack that is actually there. Returns 1 when that
+# effect is already back with the stack, so the caller has nothing left to add
+step_aside_for() { # $1 = the effect about to be added
+  is_raw "$1" && return 0
+  raw_active || return 0
+  say "${LABEL[${stack[0]}]} steps aside · the stack it displaced is back (・_・)"
+  resume_suspended
+  in_list "$1" "${stack[@]}" && return 1
+  return 0
 }
 
 # Render mode by the effect list: take the most demanding one
@@ -335,13 +431,12 @@ emit_shader() {
 # ones after. Prints one name per line
 ordered_stack() {
   local e
-  # A raw effect never joins a chain — it owns the slot alone or it is skipped
+  # No raw effect can be here: normalize_stack gave it the slot alone, and apply took
+  # that branch long before this one
   for e in "${stack[@]}"; do
-    is_raw "$e" && continue
     samples_texture "$e" && printf '%s\n' "$e"
   done
   for e in "${stack[@]}"; do
-    is_raw "$e" && continue
     samples_texture "$e" || printf '%s\n' "$e"
   done
   return 0
@@ -357,6 +452,8 @@ next_slot() {
 }
 
 apply() { # $1 (opt.) = transient: don't save state to durable state
+  normalize_stack
+
   # Fully remove the shader if there are neither effects nor dimming
   if [[ ${#stack[@]} -eq 0 && "$bright" == "1.00" ]]; then
     set_render_mode default
@@ -383,17 +480,14 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
 
   # Body list in chain order. An empty stack with bright<1 is a single passthrough
   local bodies=() e
-  if [[ ${#stack[@]} -eq 0 ]]; then
+  while IFS= read -r e; do
+    [[ -n "${FILE[$e]:-}" ]] || die "Shader not found: $e"
+    bodies+=("${FILE[$e]}")
+  done < <(ordered_stack)
+  # Also the belt for a stack that somehow emptied itself here: a shader without a body
+  # calls an effect() nobody defined, and Hyprland accepts that in silence
+  [[ ${#bodies[@]} -gt 0 ]] ||
     bodies=("${FILE[none]:?the none passthrough is missing from the shader directory}")
-  else
-    while IFS= read -r e; do
-      [[ -n "${FILE[$e]:-}" ]] || {
-        notify_error "Shader not found: $e"
-        exit 1
-      }
-      bodies+=("${FILE[$e]}")
-    done < <(ordered_stack)
-  fi
 
   next_slot
   emit_shader "$ACTIVE" "${bodies[@]}"
@@ -407,21 +501,19 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
 # Check the name and that the file exists
 require_effect() {
   if [[ -z "${FILE[$1]:-}" ]]; then
-    notify_error "Unknown effect: $1"
-    exit 1
+    die "Unknown effect: $1"
   fi
 }
 
-# A raw effect cannot share the slot, so adding one drops whatever was there — and so
-# does adding anything else while one is active. Emptying the stack beats refusing:
-# the picker toggles effects, and a refusal there just looks like a dead entry
-make_room_for() { # $1 = the effect about to be added
-  if is_raw "$1"; then
-    [[ ${#stack[@]} -eq 0 ]] || notify_info "Shader" "${LABEL[$1]} is a raw shader — it runs alone (・_・)"
-    stack=()
-  elif [[ ${#stack[@]} -eq 1 ]] && is_raw "${stack[0]}"; then
-    notify_info "Shader" "${LABEL[${stack[0]}]} is a raw shader — dropping it (・_・)"
-    stack=()
+# What an effect just added amounts to — a raw one took the whole frame and put the
+# composition on hold, an ordinary one joined the chain
+say_added() { # $1 = the effect that was added
+  if ! is_raw "$1"; then
+    say "Added: ${LABEL[$1]} · in the stack ${#stack[@]} （-＾〇＾-）"
+  elif [[ ${#suspended[@]} -gt 0 || "$suspended_bright" != "1.00" ]]; then
+    say "Added: ${LABEL[$1]} · a raw shader, so the stack waits its turn (・_・)"
+  else
+    say "Added: ${LABEL[$1]} · a raw shader, it owns the frame （-＾〇＾-）"
   fi
 }
 
@@ -433,14 +525,18 @@ push_effect() {
     return
   fi
   require_effect "$name"
-  make_room_for "$name"
+  if ! step_aside_for "$name"; then
+    apply
+    say "${LABEL[$name]} is back with the stack · in the stack ${#stack[@]} （-＾〇＾-）"
+    return
+  fi
   if in_list "$name" "${stack[@]}"; then
-    notify_info "Shader" "Already in the stack: ${LABEL[$name]} (・_・)"
+    say "Already in the stack: ${LABEL[$name]} (・_・)"
     return
   fi
   stack+=("$name")
   apply
-  notify_info "Shader" "Added: ${LABEL[$name]} · in the stack ${#stack[@]} （-＾〇＾-）"
+  say_added "$name"
 }
 
 set_single() {
@@ -450,9 +546,12 @@ set_single() {
     return
   fi
   require_effect "$name"
+  # The stack is being replaced outright, so what a raw effect suspended is not coming
+  # back — but the brightness it took away has to, or dimming vanishes without a word
+  raw_active && ! is_raw "$name" && resume_suspended
   stack=("$name")
   apply
-  notify_info "Shader" "Effect: ${LABEL[$name]} （-＾〇＾-）"
+  say "Effect: ${LABEL[$name]} （-＾〇＾-）"
 }
 
 toggle_effect() {
@@ -464,22 +563,40 @@ toggle_effect() {
   fi
   require_effect "$name"
   if in_list "$name" "${stack[@]}"; then
+    # Taking the raw effect out of the slot hands the frame back to what it displaced
+    if is_raw "$name"; then
+      resume_suspended
+      apply
+      say "Removed: ${LABEL[$name]} · the stack it displaced is back (${#stack[@]}) (・_・)"
+      return
+    fi
     for e in "${stack[@]}"; do [[ "$e" == "$name" ]] || new+=("$e"); done
     stack=("${new[@]}")
     apply
-    notify_info "Shader" "Removed: ${LABEL[$name]} · in the stack ${#stack[@]} (・_・)"
-  else
-    make_room_for "$name"
-    stack+=("$name")
-    apply
-    notify_info "Shader" "Added: ${LABEL[$name]} · in the stack ${#stack[@]} （-＾〇＾-）"
+    say "Removed: ${LABEL[$name]} · in the stack ${#stack[@]} (・_・)"
+    return
   fi
+  # Picking a suspended effect means "I want it back", not "toggle it off": it was shown
+  # as waiting, not as active
+  if ! step_aside_for "$name"; then
+    apply
+    say "${LABEL[$name]} is back with the stack · in the stack ${#stack[@]} （-＾〇＾-）"
+    return
+  fi
+  stack+=("$name")
+  apply
+  say_added "$name"
 }
 
 clear_stack() {
+  # Clear means clear: the suspended stack goes too, and only the brightness it was
+  # holding survives — that one was never the raw effect's to take
+  raw_active && resume_suspended
   stack=()
+  suspended=()
+  suspended_bright="1.00"
   apply
-  notify_info "Shader" "Effects reset (★^O^★)"
+  say "Effects reset (★^O^★)"
 }
 
 cmd_effect() {
@@ -498,8 +615,7 @@ cmd_effect() {
       set_single "${EFFECTS[$(((idx + step) % n))]}"
       ;;
     *)
-      notify_error "Usage: effect push|set|toggle|clear|next|prev <name>"
-      exit 1
+      die "Usage: effect push|set|toggle|clear|next|prev <name>"
       ;;
   esac
 }
@@ -513,26 +629,30 @@ cmd_bright() {
   flock -n 8 || exit 0
   load_state
   local step="0.05"
+  # Reading is always allowed — the UI asks for the number even while it cannot change
+  if [[ "${1:-}" == "get" ]]; then
+    awk -v b="$bright" 'BEGIN{printf "%d", b*100}'
+    return 0
+  fi
+  # A raw shader has no generated main() to multiply in, so there is nowhere to put the
+  # dimming. Recording it anyway is the old bug: the number lied while it was on screen
+  # and the screen jumped the moment the effect came off
+  if raw_active; then
+    say "${LABEL[${stack[0]}]} is a raw shader · it owns the frame, so soft brightness has nowhere to go (・_・)"
+    return 0
+  fi
   case "${1:-}" in
     up) bright=$(awk -v b="$bright" -v s="$step" 'BEGIN{v=b+s; if(v>2)v=2;    printf "%.2f", v}') ;;
     down) bright=$(awk -v b="$bright" -v s="$step" 'BEGIN{v=b-s; if(v<0.1)v=0.1; printf "%.2f", v}') ;;
     reset) bright="1.00" ;;
     toggle) if [[ "$bright" == "1.00" ]]; then bright="0.50"; else bright="1.00"; fi ;;
     set) bright=$(awk -v b="${2:?value required}" 'BEGIN{v=b; if(v>2)v=2; if(v<0.1)v=0.1; printf "%.2f", v}') ;;
-    get)
-      awk -v b="$bright" 'BEGIN{printf "%d", b*100}'
-      return 0
-      ;;
     *)
-      notify_error "Usage: bright up|down|reset|toggle|set <0.10..2.00> | get"
-      exit 1
+      die "Usage: bright up|down|reset|toggle|set <0.10..2.00> | get"
       ;;
   esac
   apply
-  # Synchronous tag: while holding the key one popup updates instead of spamming the feed
-  command -v notify-send >/dev/null 2>&1 && notify-send -u low \
-    -h string:x-canonical-private-synchronous:screen-shader-bright \
-    "Brightness" "Brightness: $(awk -v b="$bright" 'BEGIN{printf "%d", b*100}')% ☀" || true
+  say "Brightness: $(awk -v b="$bright" 'BEGIN{printf "%d", b*100}')% ☀"
 }
 
 # A temporary effect for N seconds, COMPOSITED over the current stack. Durable
@@ -593,7 +713,7 @@ cmd_restore() {
 # JSON for a waybar custom module: emojis of all stack effects + brightness percent
 cmd_status() {
   load_state
-  local pct emoji="" labels="" e class
+  local pct emoji="" labels="" e class text tooltip
   pct=$(awk -v b="$bright" 'BEGIN{printf "%d", b * 100}')
   for e in "${stack[@]}"; do
     emoji+="${EMOJI[$e]:-🎬}"
@@ -605,28 +725,41 @@ cmd_status() {
   if [[ ${#stack[@]} -eq 0 && "$bright" == "1.00" ]]; then
     # Nothing active — the module hides (empty text)
     printf '{"text":"","tooltip":"","class":"off"}\n'
-  elif [[ ${#stack[@]} -eq 0 ]]; then
-    printf '{"text":"🔅 %s%%","tooltip":"Brightness %s%%","class":"dim"}\n' "$pct" "$pct"
-  elif [[ "$bright" == "1.00" ]]; then
-    printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' "$emoji" "$labels" "$class"
-  else
-    printf '{"text":"%s %s%%","tooltip":"%s · brightness %s%%","class":"%s"}\n' \
-      "$emoji" "$pct" "$labels" "$pct" "$class"
+    return
   fi
+
+  if [[ ${#stack[@]} -eq 0 ]]; then
+    text=$(printf '🔅 %s%%' "$pct")
+    tooltip=$(printf 'Brightness %s%%' "$pct")
+  elif [[ "$bright" == "1.00" ]]; then
+    text="$emoji"
+    tooltip="$labels"
+  else
+    text=$(printf '%s %s%%' "$emoji" "$pct")
+    tooltip=$(printf '%s · brightness %s%%' "$labels" "$pct")
+  fi
+  # A raw effect displaced a composition; without a word about it the stack looks lost
+  [[ ${#suspended[@]} -eq 0 ]] || tooltip+=" · stack suspended"
+  printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' "$text" "$tooltip" "$class"
 }
 
 # List "<emoji> <label>|<value>" in menu order — the single source of truth for the
-# rofi picker (rofi-shader.sh reads exactly this). Active ones in the stack are
-# marked with an apply number in the "01. " format (stack order = the order in
-# which effects were added), to see the accumulated composition and its order
+# rofi picker (shader-modi.sh reads exactly this). Active ones in the stack are marked
+# with an apply number in the "01. " format (stack order = the order in which effects
+# were added), to see the accumulated composition and its order
 cmd_menu() {
   load_state
   local e mark pos
   for e in "${EFFECTS[@]}"; do
-    if [[ "$e" != "none" ]] && pos=$(stack_position "$e"); then
-      mark=$(printf '%02d. ' "$pos")
-    else
-      mark=""
+    mark=""
+    if [[ "$e" != "none" ]]; then
+      if pos=$(position_in "$e" "${stack[@]}"); then
+        # A raw effect owns the frame alone, so a place in an apply order says nothing
+        if is_raw "$e"; then mark="raw. "; else mark=$(printf '%02d. ' "$pos"); fi
+      elif pos=$(position_in "$e" "${suspended[@]}"); then
+        # Waiting for the raw effect to leave — in brackets, because it is not applied
+        mark=$(printf '(%02d.) ' "$pos")
+      fi
     fi
     printf '%s%s %s|%s\n' "$mark" "${EMOJI[$e]}" "${LABEL[$e]}" "$e"
   done
@@ -662,8 +795,7 @@ cmd_add() {
         shift
         ;;
       -*)
-        notify_error "Unknown flag: $1"
-        exit 1
+        die "Unknown flag: $1"
         ;;
       *)
         src="$1"
@@ -673,18 +805,15 @@ cmd_add() {
   done
 
   [[ -n "$src" ]] || {
-    notify_error "Usage: add <file.frag> [--name n] [--label L] [--emoji E] [--order N] [--animated] [--samples] [--raw] [-f]"
-    exit 1
+    die "Usage: add <file.frag> [--name n] [--label L] [--emoji E] [--order N] [--animated] [--samples] [--raw] [-f]"
   }
   [[ -f "$src" ]] || {
-    notify_error "No such file: $src"
-    exit 1
+    die "No such file: $src"
   }
 
   name="${name:-$(basename "$src" .frag)}"
   [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || {
-    notify_error "Bad effect name: $name (letters, digits, - and _)"
-    exit 1
+    die "Bad effect name: $name (letters, digits, - and _)"
   }
 
   # The one time the GLSL is looked at: a mismatch here is worth catching now rather
@@ -699,24 +828,20 @@ cmd_add() {
   fi
   if [[ "$raw" == "yes" ]]; then
     grep -qE '(^|[^A-Za-z0-9_])main[[:space:]]*\(' "$src" || {
-      notify_error "--raw expects a standalone shader with its own main(); $src has none"
-      exit 1
+      die "--raw expects a standalone shader with its own main(); $src has none"
     }
   else
     if grep -qE '(^|[^A-Za-z0-9_])main[[:space:]]*\(' "$src"; then
-      notify_error "$src defines main(): add it with --raw, or rewrite it as vec3 effect(vec3 c, vec2 uv)"
-      exit 1
+      die "$src defines main(): add it with --raw, or rewrite it as vec3 effect(vec3 c, vec2 uv)"
     fi
     grep -qE 'vec3[[:space:]]+effect[[:space:]]*\(' "$src" || {
-      notify_error "$src has no vec3 effect(vec3 c, vec2 uv) — that function is the entry point"
-      exit 1
+      die "$src has no vec3 effect(vec3 c, vec2 uv) — that function is the entry point"
     }
   fi
 
   local target="$USER_DIR/$name.frag"
   if [[ -e "$target" && -z "$force" ]]; then
-    notify_error "Already added: $name — pass -f to replace it"
-    exit 1
+    die "Already added: $name — pass -f to replace it"
   fi
 
   mkdir -p "$USER_DIR"
@@ -738,7 +863,7 @@ cmd_add() {
 
   local shadowed=""
   [[ -f "$SHADER_DIR/$name.frag" ]] && shadowed=" · replaces the installed one"
-  notify_info "Shader" "Added: $name$shadowed （-＾〇＾-）"
+  say "Added: $name$shadowed （-＾〇＾-）"
   printf '%s\n' "$target"
 }
 
@@ -749,11 +874,9 @@ cmd_remove() {
   local target="$USER_DIR/$name.frag"
   if [[ ! -f "$target" ]]; then
     if [[ -n "${FILE[$name]:-}" ]]; then
-      notify_error "$name comes with the package, it was not added at runtime"
-    else
-      notify_error "Unknown effect: $name"
+      die "$name comes with the package, it was not added at runtime"
     fi
-    exit 1
+    die "Unknown effect: $name"
   fi
   rm -f "$target"
 
@@ -763,7 +886,8 @@ cmd_remove() {
   load_effects
 
   # An effect that is gone for good must leave the stack too, or the next apply
-  # looks for a file that is not there
+  # looks for a file that is not there. If it was the raw effect holding the slot,
+  # normalize_stack inside apply hands the suspended stack back
   load_state
   if [[ -z "${FILE[$name]:-}" ]] && in_list "$name" "${stack[@]}"; then
     local e new=()
@@ -772,19 +896,22 @@ cmd_remove() {
     apply
   fi
   if [[ -n "${FILE[$name]:-}" ]]; then
-    notify_info "Shader" "Removed the added $name · the installed one is back (・_・)"
+    say "Removed the added $name · the installed one is back (・_・)"
   else
-    notify_info "Shader" "Removed: $name (・_・)"
+    say "Removed: $name (・_・)"
   fi
 }
 
-# Full reset: effects + brightness in one apply (for waybar RMB)
+# Full reset: effects + brightness in one apply (for waybar RMB). Nothing is kept, not
+# even the stack a raw effect had put aside — this is the way back to a bare screen
 cmd_reset_all() {
   load_state
   stack=()
   bright="1.00"
+  suspended=()
+  suspended_bright="1.00"
   apply
-  notify_info "Shader" "Effects and brightness reset (★^O^★)"
+  say "Effects and brightness reset (★^O^★)"
 }
 
 case "${1:-}" in
@@ -822,9 +949,7 @@ case "${1:-}" in
   reset-all) cmd_reset_all ;;
   status) cmd_status ;;
   menu) cmd_menu ;;
-  *)
-    usage >&2
-    notify_error "Usage: screen-shader effect|bright|flash|add|remove|reset-all|restore|status|menu|help"
-    exit 1
-    ;;
+  # One line, not the whole usage: stderr is what the UI layer turns into a popup, and
+  # "screen-shader help" is right there for the rest
+  *) die "Usage: screen-shader effect|bright|flash|add|remove|reset-all|restore|status|menu|help" ;;
 esac

@@ -11,8 +11,9 @@ install.sh — install screen-shader and its effects
   PREFIX=$PREFIX (override with PREFIX=... or --prefix DIR)
 
 The scripts and the shaders go to \$PREFIX/share/screen-shader, and \$PREFIX/bin gets
-symlinks to them. The scripts resolve their own location through the symlink, so the
-effects are found without any generated path
+symlinks to screen-shader and rofi-shader — the modi stays off PATH, because rofi is
+what runs it. The scripts resolve their own location through the symlink, so both the
+effects and each other are found without any generated path
 EOF
 }
 
@@ -38,6 +39,7 @@ share="$PREFIX/share/screen-shader"
 
 install -Dm755 "$here/screen-shader.sh" "$share/screen-shader.sh"
 install -Dm755 "$here/rofi-shader.sh" "$share/rofi-shader.sh"
+install -Dm755 "$here/shader-modi.sh" "$share/shader-modi.sh"
 install -d "$share/shaders"
 install -Dm644 -t "$share/shaders" "$here"/shaders/*.frag
 
