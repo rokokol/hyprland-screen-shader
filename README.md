@@ -215,7 +215,7 @@ What it does **not** cost is your stack. Taking the slot **suspends** the compos
 | `effect clear` / `reset-all` | clear means clear: the suspended stack goes too |
 | `bright` while it is on | refused, with a line saying why. Recording a number that never reaches the screen is worse than saying no — that was the old behaviour, and the dimming used to land at the moment you took the effect *off* |
 
-The rest of the header is orthogonal to `raw:`: a raw shader still declares `animated:` and `samples:`, and they still set the render mode. Only the *chain* is unavailable to it — `samples: yes` no longer means "first in line", because there is no line.
+The rest of the header is orthogonal to `raw:`: a raw shader still declares `animated:` and `samples:`, and they still set the render mode. Only the *chain* is unavailable to it: `samples: yes` loses half its meaning — "ahead of the colour filters", because there is nothing to be ahead of. Its place in the menu is a different thing entirely, that one is `order:`, and for a raw effect it works like for any other — same spot in the picker, same turn under `effect next/prev`.
 
 Without `--raw`, a file defining `main()` is refused with that explanation rather than silently producing a shader that never compiles. `nix flake check` holds the shipped effects to the same rule, in both directions.
 
