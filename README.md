@@ -78,7 +78,13 @@ bindel = SUPER CTRL, bracketleft, exec, rofi-shader bright down
 
 `screen-shader` is the manager: it writes machine output to stdout, messages for a human to stderr, and never talks to a notification daemon. `rofi-shader` is the UI layer above it — with no arguments it opens the picker, with arguments it runs the manager and turns whatever it said into a popup. So bind `rofi-shader bright up` where you want a popup and `screen-shader bright up` where something else already answers, which is why the waybar module scrolls through the manager directly: the number under the cursor is the answer.
 
-The picker's modi is a third script, `shader-modi`, installed to `libexec` and off PATH — rofi runs it, nobody types it.
+The picker's modi is a third script, `shader-modi`, installed to `libexec` and off PATH — rofi runs it, nobody types it. The picker is also a **mode of your own rofi**: point rofi at the launcher and it steps aside for the modi.
+
+```sh
+rofi -show shader -modi "shader:rofi-shader"
+```
+
+That is a detour because rofi refuses to run inside rofi (it keeps the outer pid in `ROFI_OUTSIDE` and checks it is still alive), so a launcher that finds `ROFI_RETV` in its environment knows it was mistaken for a mode. `rofi-shader --modi` prints where the modi lives, which the line above does not need — it is for pointing rofi straight at it, or for looking at what actually runs.
 
 ### Any other distribution
 

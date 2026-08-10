@@ -113,6 +113,26 @@ has "the brightness buttons follow Normal" "$out" "@info|__bright_up__"
 out="$(ROFI_SHADER_PROMPT=X picker_out)"
 has "and the mode name is overridable" "$out" "@prompt|X"
 
+# rofi refuses to run inside rofi, so composing the picker into a rofi of your own means
+# naming the modi — and it is off PATH
+is "--modi names where the picker lives" \
+  "$here/../shader-modi.sh" \
+  "$(SCREEN_SHADER_MODI="$here/../shader-modi.sh" bash "$here/../rofi-shader.sh" --modi)"
+has "and -h says so too, since that is where one looks" \
+  "$(bash "$here/../rofi-shader.sh" -h)" "--modi"
+# Pointed at as a modi it answers as one, instead of asking rofi to nest and being refused
+has "pointed at as a modi, the launcher steps aside and the modi answers" \
+  "$(ROFI_RETV=0 SCREEN_SHADER="$SS" SCREEN_SHADER_MODI="$here/../shader-modi.sh" \
+    SCREEN_SHADER_UI="$here/../rofi-shader.sh" bash "$here/../rofi-shader.sh" | tr '\000\037' '@|')" \
+  "@prompt|📺"
+# …and that shortcut must not swallow the passthrough: inside a rofi session ROFI_RETV
+# is set for everything the modi runs, the UI layer included. The brightness in the
+# picker's message is read back through it, so a swallowed passthrough shows up as a gap
+state "" "0.85"
+is "the passthrough still works with ROFI_RETV in the environment" "85" \
+  "$(ROFI_RETV=0 SCREEN_SHADER="$SS" SCREEN_SHADER_UI="$here/../rofi-shader.sh" \
+    bash "$here/../shader-modi.sh" | sed -n 's/.*brightness \([0-9]*\)%.*/\1/p')"
+
 # ── the waybar indicator ─────────────────────────────────────────────────────────
 section "status"
 state "" "1.00"

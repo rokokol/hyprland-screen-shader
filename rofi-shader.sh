@@ -12,6 +12,24 @@ SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SS="${SCREEN_SHADER:-$(dirname "$SELF")/screen-shader.sh}"
 MODI="${SCREEN_SHADER_MODI:-$(dirname "$SELF")/shader-modi.sh}"
 
+usage() {
+  cat <<EOF
+rofi-shader — the picker for screen-shader, and the popup for whatever it says
+
+  rofi-shader              open the effect picker
+  rofi-shader <command>    run screen-shader and show what it said as a popup;
+                           its output is passed through untouched
+                           (the commands are listed in "screen-shader help")
+  rofi -modi "x:rofi-shader"
+                           it works as a mode of your own rofi too, next to whatever
+                           else you keep there — run that way it steps aside and lets
+                           the picker answer
+  rofi-shader --modi       print where that picker lives. Not needed for the line
+                           above; it is for pointing rofi straight at it, or for
+                           looking at what actually runs
+EOF
+}
+
 # One synchronous tag for everything: holding the brightness key updates a single popup
 # instead of pushing a queue of them into the feed
 notify() { # $1 = urgency, $2 = title, $3 = body
@@ -29,6 +47,28 @@ notify() { # $1 = urgency, $2 = title, $3 = body
     printf '%s\n' "$3" >&2
   fi
 }
+
+# Somebody pointed rofi at this launcher. Opening a rofi from inside rofi is refused by
+# rofi itself, and being told so helps nobody — so step aside and let the modi answer, the
+# way rofi expected in the first place. Our own modi clears ROFI_RETV before calling back
+# here, so this never catches the passthrough below
+if [[ -n "${ROFI_RETV:-}" ]]; then
+  exec "$MODI" "$@"
+fi
+
+case "${1:-}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  # The picker is off PATH, so this is the only way to name it from outside. Under Nix
+  # it is the wrapper that gets named, not the script it wraps — the bare script would
+  # not know where the manager is
+  --modi)
+    printf '%s\n' "$MODI"
+    exit 0
+    ;;
+esac
 
 # Without arguments it is the picker; with them it is screen-shader with a popup on top
 if [[ $# -eq 0 ]]; then

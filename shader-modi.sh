@@ -13,13 +13,18 @@ UI="${SCREEN_SHADER_UI:-$(dirname "$SELF")/rofi-shader.sh}"
 BRIGHT_UP="__bright_up__"
 BRIGHT_DOWN="__bright_down__"
 
-# Selection via ROFI_INFO: brightness buttons adjust soft brightness; effects toggle in/out of the stack
+# What rofi told us, taken once and then cleared from the environment: everything below
+# is a child process, and rofi-shader treats ROFI_RETV as "somebody pointed rofi at me"
+selected="${ROFI_INFO:-}"
+unset ROFI_RETV ROFI_INFO
+
+# Selection via the info value: brightness buttons adjust soft brightness; effects toggle in/out of the stack
 # No exec — reprint the list so rofi stays open; "Normal" clears all, Escape closes
-if [[ -n "${ROFI_INFO:-}" ]]; then
-  case "$ROFI_INFO" in
+if [[ -n "$selected" ]]; then
+  case "$selected" in
     "$BRIGHT_UP") "$UI" bright up ;;
     "$BRIGHT_DOWN") "$UI" bright down ;;
-    *) "$UI" effect toggle "$ROFI_INFO" ;;
+    *) "$UI" effect toggle "$selected" ;;
   esac
 fi
 
