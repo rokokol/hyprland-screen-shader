@@ -360,6 +360,8 @@ is "adding the same name twice needs -f" 1 "$?"
 has "and says why" "$out" "Already added"
 run add "$src/half.frag" --label Other -f >/dev/null
 has "-f replaces it" "$(run menu)" "🎬 Other|half"
+run add "$src/half.frag" --label Third --force >/dev/null
+has "--force is the same flag" "$(run menu)" "🎬 Third|half"
 
 out="$(run add "$src/standalone.frag" 2>&1)"
 is "a standalone shader is not taken for one of ours" 1 "$?"

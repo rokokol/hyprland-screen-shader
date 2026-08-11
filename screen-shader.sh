@@ -21,7 +21,7 @@ Commands:
                           --name <n>       effect name (default: the file name)
                           --label/--emoji/--order <v>
                           --animated  --samples  --raw   (--no-… for the opposite)
-                          -f               replace one added earlier
+                          -f/--force       replace one added earlier
                           the flags are written as header lines on top of the file
   remove <name>           drop an added effect (an installed one is not ours to delete)
   flash [-k] <name> [sec] effect for N seconds (default 1.0), then revert;
@@ -809,7 +809,7 @@ cmd_add() {
   done
 
   [[ -n "$src" ]] || {
-    die "Usage: add <file.frag> [--name n] [--label L] [--emoji E] [--order N] [--animated] [--samples] [--raw] [-f]"
+    die "Usage: add <file.frag> [--name n] [--label L] [--emoji E] [--order N] [--animated] [--samples] [--raw] [-f/--force]"
   }
   [[ -f "$src" ]] || {
     die "No such file: $src"
@@ -845,7 +845,7 @@ cmd_add() {
 
   local target="$USER_DIR/$name.frag"
   if [[ -e "$target" && -z "$force" ]]; then
-    die "Already added: $name — pass -f to replace it"
+    die "Already added: $name — pass -f/--force to replace it"
   fi
 
   mkdir -p "$USER_DIR"
