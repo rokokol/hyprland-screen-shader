@@ -26,6 +26,26 @@ Came over from my rice, **[rokokol/huix](https://github.com/rokokol/huix)**
 nix run github:rokokol/hyprland-screen-shader -- flash crt 3
 ```
 
+## Contents
+
+- [Effects](#effects)
+- [Install](#install)
+  - [Home Manager](#home-manager)
+  - [Two commands, and who notifies](#two-commands-and-who-notifies)
+  - [Any other distribution](#any-other-distribution)
+- [Commands](#commands)
+- [Adding your own effect](#adding-your-own-effect)
+  - [What the file must contain](#what-the-file-must-contain)
+  - [Two directories: the declared one and the added one](#two-directories-the-declared-one-and-the-added-one)
+  - [Adding one right now](#adding-one-right-now)
+  - [A shader that was not written for this manager](#a-shader-that-was-not-written-for-this-manager)
+  - [Checking it works](#checking-it-works)
+  - [How it renders](#how-it-renders)
+- [Waybar](#waybar)
+- [Tests](#tests)
+- [Layout](#layout)
+- [License](#license)
+
 ## Effects
 
 | | | |
