@@ -56,6 +56,17 @@ nix run github:rokokol/hyprland-screen-shader -- flash crt 3
 | 🔪 `sharpen` — 3×3 kernel | 📺 `crt` — curvature, shadow mask, scanlines | 🟢 `matrix` — digital rain |
 | 💾 `jpeg` — DCT blocking and ringing | 🌊 `wave` — a slow ripple | 📡 `glitch` — RGB split and row tearing |
 
+<table>
+<tr>
+<td><img src="assets/screenshots/reading.png" alt="reading effect"></td>
+<td><img src="assets/screenshots/jpeg.png" alt="jpeg effect"></td>
+</tr>
+<tr>
+<td><img src="assets/screenshots/invert-crt-vignette.png" alt="invert, crt and vignette stacked"></td>
+<td><img src="assets/screenshots/warm-sharpen.png" alt="warm and sharpen stacked, 80% brightness"></td>
+</tr>
+</table>
+
 They **stack**. `effect push` adds a filter over the current ones, `effect toggle` adds or removes, `effect clear` drops everything. Effects that sample the texture at an offset (`crt`, `wave`, `glitch`, `jpeg`, `sharpen`) are chained first, colour filters after — so geometry happens once and colour grades the result. Two geometric effects can't honestly compose in one pass, so the last one wins
 
 ## Install
@@ -97,6 +108,8 @@ bindel = SUPER CTRL, bracketleft, exec, rofi-shader bright down
 ### Two commands, and who notifies
 
 `screen-shader` is the manager: it writes machine output to stdout, messages for a human to stderr, and never talks to a notification daemon. `rofi-shader` is the UI layer above it — with no arguments it opens the picker, with arguments it runs the manager and turns whatever it said into a popup. So bind `rofi-shader bright up` where you want a popup and `screen-shader bright up` where something else already answers, which is why the waybar module scrolls through the manager directly: the number under the cursor is the answer.
+
+<p align="center"><img src="assets/screenshots/picker.png" alt="the rofi picker, listing effects with their stack position" width="500"></p>
 
 The picker's modi is a third script, `shader-modi`, installed to `libexec` and off PATH — rofi runs it, nobody types it. The picker is also a **mode of your own rofi**: point rofi at the launcher and it steps aside for the modi.
 

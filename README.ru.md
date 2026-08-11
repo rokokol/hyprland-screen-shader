@@ -56,6 +56,17 @@ nix run github:rokokol/hyprland-screen-shader -- flash crt 3
 | 🔪 `sharpen` — ядро 3×3 | 📺 `crt` — кривизна, теневая маска, скан-линии | 🟢 `matrix` — цифровой дождь |
 | 💾 `jpeg` — блочность DCT и звон | 🌊 `wave` — медленная рябь | 📡 `glitch` — RGB-split и рвущиеся строки |
 
+<table>
+<tr>
+<td><img src="assets/screenshots/reading.png" alt="эффект reading"></td>
+<td><img src="assets/screenshots/jpeg.png" alt="эффект jpeg"></td>
+</tr>
+<tr>
+<td><img src="assets/screenshots/invert-crt-vignette.png" alt="invert, crt и vignette вместе"></td>
+<td><img src="assets/screenshots/warm-sharpen.png" alt="warm и sharpen вместе, яркость 80%"></td>
+</tr>
+</table>
+
 Они **стакаются**. `effect push` кладёт фильтр поверх текущих, `effect toggle` добавляет или убирает, `effect clear` сбрасывает всё. Эффекты, которые сэмплят текстуру со смещением (`crt`, `wave`, `glitch`, `jpeg`, `sharpen`), идут в цепочке первыми, цветовые — после: сначала геометрия, потом покраска результата. Два геометрических честно в один проход не сложить, поэтому последний перекрывает предыдущий
 
 ## Установка
@@ -97,6 +108,8 @@ bindel = SUPER CTRL, bracketleft, exec, rofi-shader bright down
 ### Две команды, и кто уведомляет
 
 `screen-shader` — менеджер: машинный вывод в stdout, сообщения человеку в stderr, и ни слова демону уведомлений. `rofi-shader` — слой UI над ним: без аргументов открывает пикер, с аргументами запускает менеджер и превращает сказанное во всплывашку. То есть `rofi-shader bright up` вешается туда, где нужен popup, а `screen-shader bright up` — туда, где ответ и так виден: поэтому скролл по модулю waybar идёт прямо в менеджер, цифра под курсором и есть ответ.
+
+<p align="center"><img src="assets/screenshots/picker.png" alt="пикер rofi со списком эффектов и их местом в стеке" width="500"></p>
 
 Сам пикер — третий скрипт, `shader-modi`: он лежит в `libexec` и не появляется на PATH, потому что запускает его rofi, а не человек. Пикер при этом — ещё и **режим твоего собственного rofi**: наводишь rofi на лаунчер, и тот уступает место modi.
 
