@@ -230,7 +230,7 @@ The flags are written as header lines **on top of** the file, and the same keys 
 | `--name <n>` | the effect name; default is the file name |
 | `--label` / `--emoji` / `--order` | the picker entry |
 | `--animated` / `--samples` / `--raw` | the header booleans; `--no-animated` and friends for the opposite |
-| `-f` | replace one added earlier |
+| `-f` `--force` | replace one added earlier |
 
 ### A shader that was not written for this manager
 
