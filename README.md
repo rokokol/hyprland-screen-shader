@@ -11,8 +11,6 @@
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
 [![build](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/build.yml)
 
-[Русский](README.ru.md)
-
 </div>
 
 Hyprland has exactly **one** shader slot, `decoration:screen_shader`. That means night-warmth and dimming and a CRT filter are mutually exclusive — whichever you set last wins, and the rest are gone. This manager takes the slot for itself and **composes**: each effect is one file describing only `vec3 effect(vec3 c, vec2 uv)`, and the manager assembles the active ones plus a brightness multiplier into a single generated shader
