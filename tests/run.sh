@@ -19,8 +19,9 @@ update=""
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# hyprctl is the only thing reaching outside; notify-send would otherwise pop real
-# toasts on the developer's desktop while the suite runs
+# Everything the scripts reach outside for. hyprctl would talk to a live compositor,
+# notify-send would pop real toasts on the developer's desktop, and rofi would open a
+# window from a path that is only supposed to print the protocol
 mkdir -p "$WORK/bin"
 # /bin/sh, not env bash: the suite also runs inside a Nix sandbox, which has no /usr/bin
 cat >"$WORK/bin/hyprctl" <<'EOF'
@@ -31,8 +32,26 @@ cat >"$WORK/bin/notify-send" <<'EOF'
 #!/bin/sh
 printf 'notify %s\n' "$*" >>"$NOTIFY"
 EOF
-chmod +x "$WORK/bin/hyprctl" "$WORK/bin/notify-send"
+cat >"$WORK/bin/rofi" <<'EOF'
+#!/bin/sh
+printf 'rofi %s\n' "$*" >>"$CALLS"
+EOF
+chmod +x "$WORK/bin/hyprctl" "$WORK/bin/notify-send" "$WORK/bin/rofi"
 export PATH="$WORK/bin:$PATH"
+
+# A stub that is not executable, or one the PATH does not reach first, silently hands the
+# suite the real tool — and for hyprctl that is a live compositor rather than a log file
+for stub in "$WORK"/bin/*; do
+  tool=$(basename "$stub")
+  if [[ ! -x $stub ]]; then
+    printf 'the %s stub is not executable\n' "$tool" >&2
+    exit 1
+  fi
+  if [[ "$(command -v "$tool")" != "$stub" ]]; then
+    printf '%s resolves to %s, not to the stub\n' "$tool" "$(command -v "$tool")" >&2
+    exit 1
+  fi
+done
 export XDG_RUNTIME_DIR="$WORK/rt"
 export SCREEN_SHADER_STATE="$WORK/state"
 # Never the developer's own added effects: the suite asserts the exact effect list

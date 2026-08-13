@@ -294,9 +294,12 @@ The indicator refreshes on `SIGRTMIN+N`, with `N` from `waybar.signal` — decla
 ```sh
 tests/run.sh              # 69 assertions, no compositor needed
 tests/run.sh --update     # re-record the golden shaders after a deliberate change
+tests/live.sh             # every effect through the real compositor, on your own screen
 ```
 
 `hyprctl` and `notify-send` are stubbed, state goes to a scratch directory, and the generated GLSL is diffed against committed golden files — so a change in how shaders are assembled shows up as a diff rather than as a surprise on the next login. `nix flake check` runs the suite plus: every effect compiled with `glslangValidator` alone and all of them composed at once, the headers being complete and their `animated:` agreeing with what the compiler kept live, the packaged wrappers, and the Home Manager module evaluated against option stubs
+
+What none of that can see is the compositor's own verdict: Hyprland drops a shader it cannot compile and the slot reads back as set either way. `tests/live.sh` sets every effect on a running session, reads `decoration:screen_shader` back and watches the Hyprland log for a compile error — so it repaints your screen once per effect and puts your stack back afterwards. It needs a session, so it never runs in CI
 
 ## Layout
 

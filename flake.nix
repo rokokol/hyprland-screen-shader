@@ -261,8 +261,8 @@
                 ];
               }
               ''
-                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh
-                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh
+                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh
+                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh
                 touch $out
               '';
         }
