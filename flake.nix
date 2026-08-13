@@ -45,7 +45,15 @@
         screen-shader = pkgs.callPackage ./nix/package.nix { };
       });
 
-      homeManagerModules.default = import ./nix/module.nix { inherit self; };
+      # homeModules is the name the flake schema knows; homeManagerModules is what most
+      # consumers still write, so both point at the same module
+      homeModules.default = import ./nix/module.nix { inherit self; };
+      homeManagerModules.default = self.homeModules.default;
+
+      # For a consumer who reaches for pkgs rather than this flake's packages directly
+      overlays.default = final: _prev: {
+        inherit (self.packages.${final.stdenv.hostPlatform.system}) screen-shader;
+      };
 
       checks = forAllSystems (
         pkgs:
