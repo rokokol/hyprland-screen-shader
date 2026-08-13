@@ -46,26 +46,18 @@ nix run github:rokokol/hyprland-screen-shader -- flash crt 3
 
 ## Effects
 
-| | | |
-| --- | --- | --- |
-| ⚫ `grayscale` | 🟤 `sepia` | 🔄 `invert` |
-| 🌅 `warm` — cuts blue, for the evening | ❄️ `cool` | 🎯 `vignette` |
-| 📖 `reading` — green paper, no glare | 🎨 `posterize` | 🌈 `none` — dimming only |
-| 🔪 `sharpen` — 3×3 kernel | 📺 `crt` — curvature, shadow mask, scanlines | 🟢 `matrix` — digital rain |
-| 💾 `jpeg` — DCT blocking and ringing | 🌊 `wave` — a slow ripple | 📡 `glitch` — RGB split and row tearing |
+| ![reading effect](assets/screenshots/reading.png)                               | ![jpeg effect](assets/screenshots/jpeg.png)                                      |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| ![invert, crt and vignette stacked](assets/screenshots/invert-crt-vignette.png) | ![warm and sharpen stacked, 80% brightness](assets/screenshots/warm-sharpen.png) |
+| ⚫ `grayscale`                                                                  | 🟤 `sepia`                                                                       |
+| 🔄 `invert`                                                                     | 🌅 `warm` — cuts blue, for the evening                                           |
+| ❄️ `cool`                                                                       | 🎯 `vignette`                                                                    |
+| 📖 `reading` — green paper, no glare                                            | 🎨 `posterize`                                                                   |
+| 🔪 `sharpen` — 3×3 kernel                                                       | 📺 `crt` — curvature, shadow mask, scanlines                                     |
+| 🟢 `matrix` — digital rain                                                      | 💾 `jpeg` — DCT blocking and ringing                                             |
+| 🌊 `wave` — a slow ripple                                                       | 📡 `glitch` — RGB split and row tearing                                          |
 
-<table>
-<tr>
-<td><img src="assets/screenshots/reading.png" alt="reading effect"></td>
-<td><img src="assets/screenshots/jpeg.png" alt="jpeg effect"></td>
-</tr>
-<tr>
-<td><img src="assets/screenshots/invert-crt-vignette.png" alt="invert, crt and vignette stacked"></td>
-<td><img src="assets/screenshots/warm-sharpen.png" alt="warm and sharpen stacked, 80% brightness"></td>
-</tr>
-</table>
-
-They **stack**. `effect push` adds a filter over the current ones, `effect toggle` adds or removes, `effect clear` drops everything. Effects that sample the texture at an offset (`crt`, `wave`, `glitch`, `jpeg`, `sharpen`) are chained first, colour filters after — so geometry happens once and colour grades the result. Two geometric effects can't honestly compose in one pass, so the last one wins
+They **stack**. `effect push` adds a filter over the current ones, `effect toggle` adds or removes, `effect clear` drops everything — and so does 🌈 `none`, the passthrough the picker offers for dimming with no effect at all. Effects that sample the texture at an offset (`crt`, `wave`, `glitch`, `jpeg`, `sharpen`) are chained first, colour filters after — so geometry happens once and colour grades the result. Two geometric effects can't honestly compose in one pass, so the last one wins
 
 ## Install
 
@@ -184,13 +176,13 @@ Two hard requirements:
 
 What you get for free — do **not** declare any of it yourself:
 
-| in scope | is |
-| --- | --- |
-| `c` | the colour so far: the screen, or the output of the previous effect in the stack |
-| `uv` | screen coordinates, 0..1 |
-| `tex` | the screen texture, for sampling somewhere other than `uv` |
-| `time` | seconds since start, float |
-| `BRIGHTNESS` | the current soft-brightness multiplier |
+| in scope     | is                                                                               |
+| ------------ | -------------------------------------------------------------------------------- |
+| `c`          | the colour so far: the screen, or the output of the previous effect in the stack |
+| `uv`         | screen coordinates, 0..1                                                         |
+| `tex`        | the screen texture, for sampling somewhere other than `uv`                       |
+| `time`       | seconds since start, float                                                       |
+| `BRIGHTNESS` | the current soft-brightness multiplier                                           |
 
 Do not write `#version`, `precision`, `in`/`out`/`uniform` declarations or `main()` — the manager emits all of them, and a second copy is a compile error. Helper functions and constants at file scope are fine and may share names with other effects: when several are composed, the later bodies are renamed (`hash` → `hash_1`).
 
@@ -202,10 +194,10 @@ The file name is the effect's name: `bloom.frag` gives `screen-shader effect pus
 
 Effects are read from **two** places, in this order:
 
-| | is | written by | survives |
-| --- | --- | --- | --- |
-| **declared** | `$SCREEN_SHADER_DIR` — the effects that ship with the install. Under Nix a store path, read-only | `install.sh`, a clone, or `programs.screen-shader.extraShaders` | a rebuild recreates it exactly; nothing else can touch it |
-| **added** | `$SCREEN_SHADER_USER_DIR`, by default `$XDG_DATA_HOME/screen-shader/shaders` | `screen-shader add` / `remove` | it is your data, not the package — a rebuild does not go near it |
+| place        | is                                                                                               | written by                                                      | survives                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------- |
+| **declared** | `$SCREEN_SHADER_DIR` — the effects that ship with the install. Under Nix a store path, read-only | `install.sh`, a clone, or `programs.screen-shader.extraShaders` | a rebuild recreates it exactly; nothing else can touch it        |
+| **added**    | `$SCREEN_SHADER_USER_DIR`, by default `$XDG_DATA_HOME/screen-shader/shaders`                     | `screen-shader add` / `remove`                                  | it is your data, not the package — a rebuild does not go near it |
 
 A name present in both is taken from the **added** one, so `add` can also override a shipped effect. `remove` deletes only from the added directory, which uncovers the declared effect of the same name rather than destroying it.
 
@@ -223,12 +215,12 @@ screen-shader add ~/bloom.frag --label Bloom --emoji 🔆 --order 65 --samples
 
 The flags are written as header lines **on top of** the file, and the same keys are dropped from the copy below — so a shader that knows nothing about this manager still lands with a header, and one that carries its own keeps whatever the flags do not override.
 
-| flag | |
-| --- | --- |
-| `--name <n>` | the effect name; default is the file name |
-| `--label` / `--emoji` / `--order` | the picker entry |
+| flag                                 | what it does                                                      |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| `--name <n>`                         | the effect name; default is the file name                         |
+| `--label` / `--emoji` / `--order`    | the picker entry                                                  |
 | `--animated` / `--samples` / `--raw` | the header booleans; `--no-animated` and friends for the opposite |
-| `-f` `--force` | replace one added earlier |
+| `-f` `--force`                       | replace one added earlier                                         |
 
 ### A shader that was not written for this manager
 
@@ -244,13 +236,13 @@ The honest cost is that it **owns the frame**: it brings its own `main()`, so no
 
 What it does **not** cost is your stack. Taking the slot **suspends** the composition instead of destroying it:
 
-| | |
-| --- | --- |
-| picking a raw effect | the stack and the brightness step aside and wait; the picker keeps showing them, in brackets: `(01.) 📺 CRT` |
-| picking it again, or any other effect | they come back, and the effect you picked lands on top |
-| `effect set` / `next` / `prev` | the stack is replaced outright, as asked — but the suspended brightness still returns, or dimming would vanish without a word |
-| `effect clear` / `reset-all` | clear means clear: the suspended stack goes too |
-| `bright` while it is on | refused, with a line saying why. Recording a number that never reaches the screen is worse than saying no — that was the old behaviour, and the dimming used to land at the moment you took the effect *off* |
+| what you do                           | what happens                                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| picking a raw effect                  | the stack and the brightness step aside and wait; the picker keeps showing them, in brackets: `(01.) 📺 CRT`                                                                                                 |
+| picking it again, or any other effect | they come back, and the effect you picked lands on top                                                                                                                                                       |
+| `effect set` / `next` / `prev`        | the stack is replaced outright, as asked — but the suspended brightness still returns, or dimming would vanish without a word                                                                                |
+| `effect clear` / `reset-all`          | clear means clear: the suspended stack goes too                                                                                                                                                              |
+| `bright` while it is on               | refused, with a line saying why. Recording a number that never reaches the screen is worse than saying no — that was the old behaviour, and the dimming used to land at the moment you took the effect *off* |
 
 The rest of the header is orthogonal to `raw:`: a raw shader still declares `animated:` and `samples:`, and they still set the render mode. Only the *chain* is unavailable to it: `samples: yes` loses half its meaning — "ahead of the colour filters", because there is nothing to be ahead of. Its place in the menu is a different thing entirely, that one is `order:`, and for a raw effect it works like for any other — same spot in the picker, same turn under `effect next/prev`.
 
@@ -275,11 +267,11 @@ Working in a clone you get that for free: `nix flake check` compiles every effec
 
 Hyprland has to be told how hard to redraw, and that comes from the `animated:` and `samples:` lines of the header. `yes`/`true`/`on`/`1`, case-insensitive; **anything else, including a missing line, is no**.
 
-| | declared | `damage_tracking` / `vfr` | why |
-| --- | --- | --- | --- |
-| animated | `animated: yes` | `0` / `0` | a frame every tick; with VFR on Hyprland idles and the animation stutters |
-| offset | `samples: yes` | `1` / `1` | offset sampling reads neighbouring areas, which precise damage has not drawn yet — redraw the whole monitor, but still sleep when idle |
-| plain | neither | `2` / `1` | per-pixel, partial damage is fine |
+| mode     | declared        | `damage_tracking` / `vfr` | why                                                                                                                                    |
+| -------- | --------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| animated | `animated: yes` | `0` / `0`                 | a frame every tick; with VFR on Hyprland idles and the animation stutters                                                              |
+| offset   | `samples: yes`  | `1` / `1`                 | offset sampling reads neighbouring areas, which precise damage has not drawn yet — redraw the whole monitor, but still sleep when idle |
+| plain    | neither         | `2` / `1`                 | per-pixel, partial damage is fine                                                                                                      |
 
 `samples: yes` also puts the effect **first** in the chain, ahead of the colour filters — geometry happens once, colour grades the result. A raw shader has no chain, but both keys still apply to it: it is one shader, and Hyprland still has to be told how hard to redraw for it.
 
