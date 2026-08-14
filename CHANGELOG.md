@@ -4,6 +4,11 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ## [Unreleased]
 
+### Fixed
+
+- `tests/live.sh` puts the session's state file back: `restore` re-applies whatever the loop last wrote, so a run used to leave the last effect switched on
+- `tests/live.sh` no longer claims to check for compile errors in `hyprland.log` — measured on Hyprland 0.56.1, a refused shader appears only on the on-screen error bar, so that assertion could never fail
+
 ## [1.0.0] - 2026-08-13
 
 Split out of [rokokol/huix](https://github.com/rokokol/huix), where it was a script and a pile of `.frag` files under the Hyprland directory
