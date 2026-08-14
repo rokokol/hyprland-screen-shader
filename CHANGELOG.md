@@ -4,6 +4,8 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-14
+
 ### Fixed
 
 - `tests/live.sh` puts the session's state file back: `restore` re-applies whatever the loop last wrote, so a run used to leave the last effect switched on
