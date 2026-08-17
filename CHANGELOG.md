@@ -4,6 +4,10 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ## [Unreleased]
 
+### Fixed
+
+- the Nix package version follows the latest release instead of the pre-release script version
+
 ## [1.0.1] - 2026-08-14
 
 ### Fixed
