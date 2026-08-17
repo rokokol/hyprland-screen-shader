@@ -64,7 +64,7 @@ in
 
 stdenvNoCC.mkDerivation {
   pname = "screen-shader";
-  version = "1.0.1";
+  version = "1.0.2";
 
   dontUnpack = true;
   nativeBuildInputs = [ makeWrapper ];
