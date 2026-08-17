@@ -4,6 +4,10 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ## [Unreleased]
 
+### Changed
+
+- `install.sh` accepts `DESTDIR` independently of `PREFIX`, so package recipes can stage its canonical layout
+
 ### Fixed
 
 - the Nix package version follows the latest release instead of the pre-release script version
