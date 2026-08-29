@@ -59,4 +59,7 @@ install -d "$root/bin"
 ln -sfn ../share/screen-shader/screen-shader.sh "$root/bin/screen-shader"
 ln -sfn ../share/screen-shader/rofi-shader.sh "$root/bin/rofi-shader"
 
+install -Dm644 "$here/completions/screen-shader.bash" "$root/share/bash-completion/completions/screen-shader"
+install -Dm644 "$here/completions/_screen-shader" "$root/share/zsh/site-functions/_screen-shader"
+
 echo "installed to $share, linked into $root/bin"

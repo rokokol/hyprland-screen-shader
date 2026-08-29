@@ -48,5 +48,7 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
       - uses: cachix/install-nix-action@v31
-      - run: nix run nixpkgs#shellcheck -- install.sh screen-shader.sh rofi-shader.sh shader-modi.sh tests/run.sh tests/live.sh
-      - run: nix run nixpkgs#shfmt -- -d -i 2 -ci install.sh screen-shader.sh rofi-shader.sh shader-modi.sh tests/run.sh tests/live.sh
+      - run: nix run nixpkgs#shellcheck -- install.sh screen-shader.sh rofi-shader.sh shader-modi.sh tests/run.sh tests/live.sh completions/screen-shader.bash
+      - run: nix run nixpkgs#shfmt -- -d -i 2 -ci install.sh screen-shader.sh rofi-shader.sh shader-modi.sh tests/run.sh tests/live.sh completions/screen-shader.bash
+      # zsh is not shellcheck's language; a parse is what can be checked
+      - run: nix run nixpkgs#zsh -- -n completions/_screen-shader

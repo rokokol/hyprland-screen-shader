@@ -521,5 +521,26 @@ for case in "grayscale" "crt" "wave" "crt grayscale sepia" "glitch crt vignette"
   fi
 done
 
+# ── completions ──────────────────────────────────────────────────────────────────
+section "completions"
+# The completion files spell the command list by hand; the dispatcher's usage line is the
+# declaration they must not drift from. Read from the source, not $SS: a wrapped copy
+# under test carries no usage line of its own
+usage_cmds="$(sed -n 's/.*die "Usage: screen-shader \([a-z|-]*\)".*/\1/p' "$here/../screen-shader.sh" | tr '|' ' ')"
+if [[ -z "$usage_cmds" ]]; then
+  bad "the usage line still declares the commands" "a non-empty list" "nothing matched"
+else
+  drifted=""
+  for cmd in $usage_cmds; do
+    grep -qw "$cmd" "$here/../completions/screen-shader.bash" || drifted+=" bash:$cmd"
+    grep -q "'$cmd:" "$here/../completions/_screen-shader" || drifted+=" zsh:$cmd"
+  done
+  if [[ -z "$drifted" ]]; then
+    ok "completions know every dispatched command"
+  else
+    bad "completions know every dispatched command" "all of: $usage_cmds" "missing:$drifted"
+  fi
+fi
+
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

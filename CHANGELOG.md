@@ -4,6 +4,12 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-29
+
+### Added
+
+- bash and zsh completions, installed by the package and by `install.sh`; effect names complete live through `screen-shader menu`, and the suite checks the spelled command lists against the dispatcher's usage line
+
 ## [1.0.2] - 2026-08-18
 
 ### Changed

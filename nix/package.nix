@@ -5,6 +5,7 @@
 {
   lib,
   stdenvNoCC,
+  installShellFiles,
   makeWrapper,
   writeText,
   bash,
@@ -41,6 +42,14 @@ let
     name = "screen-shader-shaders";
     path = ../shaders;
   };
+  bashCompletion = builtins.path {
+    name = "screen-shader.bash";
+    path = ../completions/screen-shader.bash;
+  };
+  zshCompletion = builtins.path {
+    name = "_screen-shader";
+    path = ../completions/_screen-shader;
+  };
 
   # Left empty when unset, so the script's own default stays the single source of it
   promptArg = lib.optionalString (
@@ -64,10 +73,13 @@ in
 
 stdenvNoCC.mkDerivation {
   pname = "screen-shader";
-  version = "1.0.2";
+  version = "1.1.0";
 
   dontUnpack = true;
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [
+    installShellFiles
+    makeWrapper
+  ];
   buildInputs = [ bash ];
 
   installPhase = ''
@@ -88,6 +100,9 @@ stdenvNoCC.mkDerivation {
     # libexec, not bin: rofi runs the modi, a human never does
     install -Dm755 ${modi} $out/libexec/shader-modi
     patchShebangs $out/bin $out/libexec
+
+    installShellCompletion --bash --name screen-shader ${bashCompletion}
+    installShellCompletion --zsh --name _screen-shader ${zshCompletion}
 
     # --set-default, not --set: an override from the caller's environment still wins
     wrapProgram $out/bin/screen-shader \

@@ -38,6 +38,10 @@
         name = "screen-shader-tests";
         path = ./tests;
       };
+      completionsDir = builtins.path {
+        name = "screen-shader-completions";
+        path = ./completions;
+      };
     in
     {
       packages = forAllSystems (pkgs: rec {
@@ -83,6 +87,7 @@
                 cp ${modi} repo/shader-modi.sh
                 cp -r ${shaderDir} repo/shaders
                 cp -r ${testsDir} repo/tests
+                cp -r ${completionsDir} repo/completions
                 chmod -R +w repo
                 patchShebangs repo
                 bash repo/tests/run.sh
@@ -266,11 +271,14 @@
                 nativeBuildInputs = [
                   pkgs.shellcheck
                   pkgs.shfmt
+                  pkgs.zsh
                 ];
               }
               ''
-                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh
-                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh
+                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${completionsDir}/screen-shader.bash
+                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${completionsDir}/screen-shader.bash
+                # zsh is not shellcheck's language; a parse is what can be checked
+                zsh -n ${completionsDir}/_screen-shader
                 touch $out
               '';
         }

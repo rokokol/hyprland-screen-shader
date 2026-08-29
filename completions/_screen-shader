@@ -1,0 +1,72 @@
+#compdef screen-shader
+# zsh completion for screen-shader. The command lists are spelled here by hand;
+# tests/run.sh checks them against the dispatcher's usage line, so a command added there
+# fails the suite until it lands here
+
+_screen_shader_names() {
+  # Live names from the tool itself: menu prints "<emoji> <label>|<name>" lines
+  local -a names
+  names=(${(f)"$(screen-shader menu 2>/dev/null | cut -d'|' -f2)"})
+  _describe -t effects 'effect' names
+}
+
+_screen-shader() {
+  local -a commands=(
+    'effect:manage the effect stack'
+    'bright:software brightness'
+    'flash:apply an effect for N seconds, then revert'
+    'add:install an effect from a .frag file'
+    'remove:drop an added effect'
+    'restore:re-read state and apply again'
+    'reset-all:drop effects and brightness in one apply'
+    'status:JSON for a waybar custom module'
+    'menu:lines for the rofi picker'
+    'help:usage'
+  )
+
+  if ((CURRENT == 2)); then
+    _describe -t commands 'screen-shader command' commands
+    return
+  fi
+
+  case "$words[2]" in
+    effect)
+      if ((CURRENT == 3)); then
+        local -a subcommands=(
+          'push:add an effect over the current stack'
+          'set:replace the stack with a single effect'
+          'clear:turn all effects off'
+          'toggle:add the effect, or remove it if stacked'
+          'next:replace the stack with the next effect'
+          'prev:replace the stack with the previous effect'
+        )
+        _describe -t commands 'effect command' subcommands
+      else
+        case "$words[3]" in
+          push | set | toggle) _screen_shader_names ;;
+        esac
+      fi
+      ;;
+    bright)
+      if ((CURRENT == 3)); then
+        local -a subcommands=(
+          'up:brightness +5%'
+          'down:brightness -5%'
+          'reset:brightness 100%'
+          'toggle:100% or 50%'
+          'set:brightness exactly (0.10..2)'
+          'get:current brightness in percent'
+        )
+        _describe -t commands 'bright command' subcommands
+      fi
+      ;;
+    flash | remove)
+      _screen_shader_names
+      ;;
+    add)
+      _files -g '*.frag'
+      ;;
+  esac
+}
+
+_screen-shader "$@"
