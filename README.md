@@ -80,7 +80,7 @@ They **stack**. `effect push` adds a filter over the current ones, `effect toggl
 }
 ```
 
-Enabling it installs the package, defines a `custom/shader` module in the named bars, and writes exactly one line into your Hyprland config — `exec = screen-shader restore`. That line is not a taste: the shader slot is runtime state and is lost on every reload, so without it an active effect quietly falls off.
+Enabling it installs the package, defines a `custom/shader` module in the named bars, and writes exactly one line into your Hyprland config — `exec = screen-shader restore`. That line is not a taste: the shader slot is runtime state and is lost on every reload, so without it an active effect quietly falls off
 
 Keys are yours, because a binding *is* a taste and belongs in your own config:
 
@@ -96,17 +96,17 @@ bindel = SUPER CTRL, bracketleft, exec, rofi-shader bright down
 
 ### Two commands, and who notifies
 
-`screen-shader` is the manager: it writes machine output to stdout, messages for a human to stderr, and never talks to a notification daemon. `rofi-shader` is the UI layer above it — with no arguments it opens the picker, with arguments it runs the manager and turns whatever it said into a popup. So bind `rofi-shader bright up` where you want a popup and `screen-shader bright up` where something else already answers, which is why the waybar module scrolls through the manager directly: the number under the cursor is the answer.
+`screen-shader` is the manager: it writes machine output to stdout, messages for a human to stderr, and never talks to a notification daemon. `rofi-shader` is the UI layer above it — with no arguments it opens the picker, with arguments it runs the manager and turns whatever it said into a popup. So bind `rofi-shader bright up` where you want a popup and `screen-shader bright up` where something else already answers, which is why the waybar module scrolls through the manager directly: the number under the cursor is the answer
 
 <p align="center"><img src="assets/screenshots/picker.png" alt="the rofi picker, listing effects with their stack position" width="500"></p>
 
-The picker's modi is a third script, `shader-modi`, installed to `libexec` and off PATH — rofi runs it, nobody types it. The picker is also a **mode of your own rofi**: point rofi at the launcher and it steps aside for the modi.
+The picker's modi is a third script, `shader-modi`, installed to `libexec` and off PATH — rofi runs it, nobody types it. The picker is also a **mode of your own rofi**: point rofi at the launcher and it steps aside for the modi
 
 ```sh
 rofi -show shader -modi "shader:rofi-shader"
 ```
 
-That is a detour because rofi refuses to run inside rofi (it keeps the outer pid in `ROFI_OUTSIDE` and checks it is still alive), so a launcher that finds `ROFI_RETV` in its environment knows it was mistaken for a mode. `rofi-shader --modi` prints where the modi lives, which the line above does not need — it is for pointing rofi straight at it, or for looking at what actually runs.
+That is a detour because rofi refuses to run inside rofi (it keeps the outer pid in `ROFI_OUTSIDE` and checks it is still alive), so a launcher that finds `ROFI_RETV` in its environment knows it was mistaken for a mode. `rofi-shader --modi` prints where the modi lives, which the line above does not need — it is for pointing rofi straight at it, or for looking at what actually runs
 
 ### Any other distribution
 
@@ -153,7 +153,7 @@ The choice — the stack and the brightness — lives in `$XDG_STATE_HOME/screen
 
 ## Adding your own effect
 
-An effect is **one file** and nothing else — there is no list to append to and no table to keep in sync. Registration is the file landing in the shader directory; the manager rescans on every invocation.
+An effect is **one file** and nothing else — there is no list to append to and no table to keep in sync. Registration is the file landing in the shader directory; the manager rescans on every invocation
 
 ### What the file must contain
 
@@ -185,11 +185,11 @@ What you get for free — do **not** declare any of it yourself:
 | `time`       | seconds since start, float                                                       |
 | `BRIGHTNESS` | the current soft-brightness multiplier                                           |
 
-Do not write `#version`, `precision`, `in`/`out`/`uniform` declarations or `main()` — the manager emits all of them, and a second copy is a compile error. Helper functions and constants at file scope are fine and may share names with other effects: when several are composed, the later bodies are renamed (`hash` → `hash_1`).
+Do not write `#version`, `precision`, `in`/`out`/`uniform` declarations or `main()` — the manager emits all of them, and a second copy is a compile error. Helper functions and constants at file scope are fine and may share names with other effects: when several are composed, the later bodies are renamed (`hash` → `hash_1`)
 
-All of that is about a composable effect. A **raw** shader (`// raw: yes`, below) is the other kind: it declares its own uniforms and gets none of the table above, `BRIGHTNESS` included.
+All of that is about a composable effect. A **raw** shader (`// raw: yes`, below) is the other kind: it declares its own uniforms and gets none of the table above, `BRIGHTNESS` included
 
-The file name is the effect's name: `bloom.frag` gives `screen-shader effect push bloom`.
+The file name is the effect's name: `bloom.frag` gives `screen-shader effect push bloom`
 
 ### Two directories: the declared one and the added one
 
@@ -200,9 +200,9 @@ Effects are read from **two** places, in this order:
 | **declared** | `$SCREEN_SHADER_DIR` — the effects that ship with the install. Under Nix a store path, read-only | `install.sh`, a clone, or `programs.screen-shader.extraShaders` | a rebuild recreates it exactly; nothing else can touch it        |
 | **added**    | `$SCREEN_SHADER_USER_DIR`, by default `$XDG_DATA_HOME/screen-shader/shaders`                     | `screen-shader add` / `remove`                                  | it is your data, not the package — a rebuild does not go near it |
 
-A name present in both is taken from the **added** one, so `add` can also override a shipped effect. `remove` deletes only from the added directory, which uncovers the declared effect of the same name rather than destroying it.
+A name present in both is taken from the **added** one, so `add` can also override a shipped effect. `remove` deletes only from the added directory, which uncovers the declared effect of the same name rather than destroying it
 
-The split is what makes both halves honest under Nix: the declarative one is reproducible and belongs in the config, the imperative one is for trying something out now, at the cost of not being in the config. Once an effect earns its place, move it to `extraShaders` and `remove` the added copy.
+The split is what makes both halves honest under Nix: the declarative one is reproducible and belongs in the config, the imperative one is for trying something out now, at the cost of not being in the config. Once an effect earns its place, move it to `extraShaders` and `remove` the added copy
 
 ```nix
 programs.screen-shader.extraShaders.bloom = ./bloom.frag;
@@ -214,7 +214,7 @@ programs.screen-shader.extraShaders.bloom = ./bloom.frag;
 screen-shader add ~/bloom.frag --label Bloom --emoji 🔆 --order 65 --samples
 ```
 
-The flags are written as header lines **on top of** the file, and the same keys are dropped from the copy below — so a shader that knows nothing about this manager still lands with a header, and one that carries its own keeps whatever the flags do not override.
+The flags are written as header lines **on top of** the file, and the same keys are dropped from the copy below — so a shader that knows nothing about this manager still lands with a header, and one that carries its own keeps whatever the flags do not override
 
 | flag                                 | what it does                                                      |
 | ------------------------------------ | ----------------------------------------------------------------- |
@@ -231,9 +231,9 @@ An ordinary Hyprland screen shader — its own `#version`, `main()`, writing `fr
 screen-shader add ~/blue-light.frag --raw --label "Blue light" --emoji 🔵 --order 45
 ```
 
-`--raw` is the flag; `// raw: yes` is the same thing as a header line, and the only way to declare it for an effect that arrives through `extraShaders` rather than through `add`. Either way the file is handed to Hyprland exactly as written, header lines aside.
+`--raw` is the flag; `// raw: yes` is the same thing as a header line, and the only way to declare it for an effect that arrives through `extraShaders` rather than through `add`. Either way the file is handed to Hyprland exactly as written, header lines aside
 
-The honest cost is that it **owns the frame**: it brings its own `main()`, so nothing composes with it, and soft brightness has no place to multiply — there is no generated `main()` to put the multiply in.
+The honest cost is that it **owns the frame**: it brings its own `main()`, so nothing composes with it, and soft brightness has no place to multiply — there is no generated `main()` to put the multiply in
 
 What it does **not** cost is your stack. Taking the slot **suspends** the composition instead of destroying it:
 
@@ -245,9 +245,9 @@ What it does **not** cost is your stack. Taking the slot **suspends** the compos
 | `effect clear` / `reset-all`          | clear means clear: the suspended stack goes too                                                                                                                                                              |
 | `bright` while it is on               | refused, with a line saying why. Recording a number that never reaches the screen is worse than saying no — that was the old behaviour, and the dimming used to land at the moment you took the effect *off* |
 
-The rest of the header is orthogonal to `raw:`: a raw shader still declares `animated:` and `samples:`, and they still set the render mode. Only the *chain* is unavailable to it: `samples: yes` loses half its meaning — "ahead of the colour filters", because there is nothing to be ahead of. Its place in the menu is a different thing entirely, that one is `order:`, and for a raw effect it works like for any other — same spot in the picker, same turn under `effect next/prev`.
+The rest of the header is orthogonal to `raw:`: a raw shader still declares `animated:` and `samples:`, and they still set the render mode. Only the *chain* is unavailable to it: `samples: yes` loses half its meaning — "ahead of the colour filters", because there is nothing to be ahead of. Its place in the menu is a different thing entirely, that one is `order:`, and for a raw effect it works like for any other — same spot in the picker, same turn under `effect next/prev`
 
-Without `--raw`, a file defining `main()` is refused with that explanation rather than silently producing a shader that never compiles. `nix flake check` holds the shipped effects to the same rule, in both directions.
+Without `--raw`, a file defining `main()` is refused with that explanation rather than silently producing a shader that never compiles. `nix flake check` holds the shipped effects to the same rule, in both directions
 
 ### Checking it works
 
@@ -262,11 +262,11 @@ A **name** you got wrong is caught loudly — the manager checks the file exists
 glslangValidator -S frag "$XDG_RUNTIME_DIR"/screen-shader/active-*.frag
 ```
 
-Working in a clone you get that for free: `nix flake check` compiles every effect, alone and composed with all the others, which is also the only way a name collision or a stray `main()` surfaces before you are staring at an unchanged screen.
+Working in a clone you get that for free: `nix flake check` compiles every effect, alone and composed with all the others, which is also the only way a name collision or a stray `main()` surfaces before you are staring at an unchanged screen
 
 ### How it renders
 
-Hyprland has to be told how hard to redraw, and that comes from the `animated:` and `samples:` lines of the header. `yes`/`true`/`on`/`1`, case-insensitive; **anything else, including a missing line, is no**.
+Hyprland has to be told how hard to redraw, and that comes from the `animated:` and `samples:` lines of the header. `yes`/`true`/`on`/`1`, case-insensitive; **anything else, including a missing line, is no**
 
 | mode     | declared        | `damage_tracking` / `vfr` | why                                                                                                                                    |
 | -------- | --------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -274,9 +274,9 @@ Hyprland has to be told how hard to redraw, and that comes from the `animated:` 
 | offset   | `samples: yes`  | `1` / `1`                 | offset sampling reads neighbouring areas, which precise damage has not drawn yet — redraw the whole monitor, but still sleep when idle |
 | plain    | neither         | `2` / `1`                 | per-pixel, partial damage is fine                                                                                                      |
 
-`samples: yes` also puts the effect **first** in the chain, ahead of the colour filters — geometry happens once, colour grades the result. A raw shader has no chain, but both keys still apply to it: it is one shader, and Hyprland still has to be told how hard to redraw for it.
+`samples: yes` also puts the effect **first** in the chain, ahead of the colour filters — geometry happens once, colour grades the result. A raw shader has no chain, but both keys still apply to it: it is one shader, and Hyprland still has to be told how hard to redraw for it
 
-Get it wrong upwards and you spend redraws; downwards is what you actually notice — an animation that stands still, or distortion that smears over undamaged screen. So `nix flake check` verifies the `animated` half against the compiler: reflection lists only the uniforms a shader really uses, so an effect whose `time` survives compilation and does not say `animated: yes` fails the build.
+Get it wrong upwards and you spend redraws; downwards is what you actually notice — an animation that stands still, or distortion that smears over undamaged screen. So `nix flake check` verifies the `animated` half against the compiler: reflection lists only the uniforms a shader really uses, so an effect whose `time` survives compilation and does not say `animated: yes` fails the build
 
 ## Waybar
 
