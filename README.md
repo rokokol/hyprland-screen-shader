@@ -42,7 +42,6 @@ nix run github:rokokol/hyprland-screen-shader -- flash crt 3
 - [Waybar](#waybar)
 - [Tests](#tests)
 - [Layout](#layout)
-- [License](#license)
 
 ## Effects
 
@@ -313,7 +312,3 @@ shaders/*.frag     one effect per file
 nix/               package.nix, module.nix, module-test.nix
 tests/             run.sh and the golden shaders
 ```
-
-## License
-
-MIT
