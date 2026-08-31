@@ -22,6 +22,13 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
       - uses: cachix/install-nix-action@v31
+      - name: VERSION matches CHANGELOG
+        run: |
+          ver=$(cat VERSION)
+          grep -qF "## [$ver]" CHANGELOG.md || {
+            echo "VERSION says $ver but CHANGELOG.md has no ## [$ver] heading" >&2
+            exit 1
+          }
       - run: nix build --no-write-lock-file .#screen-shader
       # tests, shaders-compile, shaders-metadata, package-smoke, module-wiring, scripts-lint
       - run: nix flake check --no-write-lock-file
@@ -33,14 +40,33 @@ jobs:
           test -L out/bin/screen-shader
           test -L out/bin/rofi-shader
           test ! -e out/bin/shader-modi
+          test -f out/share/screen-shader/install-manifest
+          out/bin/screen-shader --version | grep -xF "screen-shader $(cat VERSION)"
           out/bin/screen-shader menu | grep -xF '⚫ Grayscale|grayscale' >/dev/null
           SCREEN_SHADER=$PWD/out/bin/screen-shader ./tests/run.sh
+          # The env-baking flags replace symlinks with two-line wrappers; a run without
+          # them puts the symlinks back — the flags are declarative
+          PREFIX=$PWD/out ./install.sh --waybar-signal 8 --rofi-prompt test --extra-shader shaders/warm.frag
+          test ! -L out/bin/screen-shader
+          grep -qF 'WAYBAR_SHADER_SIGNAL:-8' out/bin/screen-shader
+          grep -q 'ROFI_SHADER_PROMPT' out/bin/rofi-shader
+          out/bin/screen-shader --version | grep -xF "screen-shader $(cat VERSION)"
+          PREFIX=$PWD/out ./install.sh
+          test -L out/bin/screen-shader
+          # Uninstall consumes the manifest and leaves nothing of ours behind
+          PREFIX=$PWD/out ./install.sh --uninstall
+          test ! -e out/bin/screen-shader
+          test ! -e out/share/screen-shader
           DESTDIR=$PWD/stage PREFIX=/usr ./install.sh
           test -L stage/usr/bin/screen-shader
           stage/usr/bin/screen-shader menu | grep -xF '⚫ Grayscale|grayscale' >/dev/null
+          DESTDIR=$PWD/stage PREFIX=/usr ./install.sh --uninstall
+          test ! -e stage/usr/share/screen-shader
           ! DESTDIR=$PWD/bad PREFIX=usr ./install.sh >/dev/null 2>&1
       - run: nix fmt -- --ci
 
+  # The one file list lives in the flake's scripts-lint check — this job is a fast,
+  # separately-named status for it, not a second copy of the commands
   shell:
     runs-on: ubuntu-latest
     steps:
@@ -48,7 +74,4 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
       - uses: cachix/install-nix-action@v31
-      - run: nix develop --no-write-lock-file --command shellcheck install.sh screen-shader.sh rofi-shader.sh shader-modi.sh tests/run.sh tests/live.sh completions/screen-shader.bash
-      - run: nix develop --no-write-lock-file --command shfmt -d -i 2 -ci install.sh screen-shader.sh rofi-shader.sh shader-modi.sh tests/run.sh tests/live.sh completions/screen-shader.bash
-      # zsh is not shellcheck's language; a parse is what can be checked
-      - run: nix run nixpkgs#zsh -- -n completions/_screen-shader
+      - run: nix build --no-write-lock-file .#checks.x86_64-linux.scripts-lint

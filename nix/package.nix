@@ -30,6 +30,10 @@ let
     name = "screen-shader.sh";
     path = ../screen-shader.sh;
   };
+  versionFile = builtins.path {
+    name = "screen-shader-VERSION";
+    path = ../VERSION;
+  };
   picker = builtins.path {
     name = "rofi-shader.sh";
     path = ../rofi-shader.sh;
@@ -73,7 +77,8 @@ in
 
 stdenvNoCC.mkDerivation {
   pname = "screen-shader";
-  version = "1.1.0";
+  # VERSION is the one place the number lives; CI holds CHANGELOG.md to it
+  version = lib.fileContents ../VERSION;
 
   dontUnpack = true;
   nativeBuildInputs = [
@@ -94,6 +99,9 @@ stdenvNoCC.mkDerivation {
       ) extraShaders
     )}
     chmod +w "$dir"/*.frag
+
+    # --version finds this one prefix over from the wrapped script in bin
+    install -Dm644 ${versionFile} $out/share/screen-shader/VERSION
 
     install -Dm755 ${script} $out/bin/screen-shader
     install -Dm755 ${picker} $out/bin/rofi-shader

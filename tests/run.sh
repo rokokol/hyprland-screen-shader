@@ -542,5 +542,11 @@ else
   fi
 fi
 
+# ── version ──────────────────────────────────────────────────────────────────────
+section "version"
+# VERSION is the one place the number lives; both short and long forms answer with it
+is "--version answers with the VERSION file" "screen-shader $(cat "$here/../VERSION")" "$(run --version)"
+is "-v is the same flag" "$(run --version)" "$(run -v)"
+
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

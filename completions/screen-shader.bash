@@ -12,7 +12,7 @@ _screen_shader() {
   local cmd=${COMP_WORDS[1]-} sub=${COMP_WORDS[2]-}
 
   if ((COMP_CWORD == 1)); then
-    mapfile -t COMPREPLY < <(compgen -W "effect bright flash add remove restore reset-all status menu help" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "effect bright flash add remove restore reset-all status menu help --version" -- "$cur")
     return
   fi
 

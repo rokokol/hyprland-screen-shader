@@ -36,6 +36,7 @@ Commands:
                           (active ones marked with an apply number: 01. 02. 03.;
                           a raw one with "raw."; suspended ones with "(01.)")
   help                    this help
+  -v, --version           print the version
 
 Effects STACK: every `effect push` adds a filter over the previous ones (the rofi
 picker sends `effect toggle`), and they compose into one shader until the stack is
@@ -921,6 +922,19 @@ cmd_reset_all() {
 case "${1:-}" in
   help | -h | --help)
     usage
+    exit 0
+    ;;
+  # VERSION sits beside the script (the repo root in a checkout, share/screen-shader
+  # under install.sh) or one prefix over (the Nix package wraps the script into bin
+  # while VERSION stays in share)
+  -v | --version)
+    for v in "$(dirname "$SELF")/VERSION" "$(dirname "$SELF")/../share/screen-shader/VERSION"; do
+      if [[ -f "$v" ]]; then
+        echo "screen-shader $(cat "$v")"
+        exit 0
+      fi
+    done
+    echo "screen-shader unknown"
     exit 0
     ;;
 esac

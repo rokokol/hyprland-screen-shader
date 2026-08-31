@@ -4,6 +4,19 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ## [Unreleased]
 
+### Added
+
+- a `VERSION` file as the one place the version lives: `nix/package.nix` reads it, `screen-shader --version`/`-v` and `./install.sh --version`/`-v` print it, and CI refuses a release whose `CHANGELOG.md` has no heading for it
+- installer flags for the package's install-affecting options: repeatable `--extra-shader FILE`, and `--rofi-prompt`/`--waybar-signal`, which replace a bin symlink with a two-line wrapper exporting the default so the caller's environment still wins — the non-Nix analog of `wrapProgram --set-default`
+- `--uninstall` by manifest: the install writes `share/screen-shader/install-manifest` naming every file it created, uninstall consumes it, and a re-run sweeps whatever a previous install wrote that the current flags do not — the installer is declarative
+- a dependency preflight that installs nothing on its own: missing tools are named and the distribution's own install command is printed as a runnable `$` line; `hyprctl`, `rofi` and `notify-send` only warn, because they come from the session
+- tab completion for `install.sh` itself (`source completions/install.sh.bash` or `.zsh`), with a drift check that fails the lint when a flag exists in only one of the three places
+- distro tests: `tests/distro.sh` installs for real, as root, in `debian`/`ubuntu`/`archlinux`/`fedora` `:latest` containers by running the preflight's own printed guidance, then runs the behaviour suite against the installed copy and uninstalls by the manifest; CI runs them on every push to master and weekly, never on pull requests, with one README badge per distribution
+
+### Changed
+
+- the shell lint's file list lives only in the flake's `scripts-lint` check; the CI shell job builds that check instead of repeating the commands
+
 ## [1.1.0] - 2026-08-29
 
 ### Added

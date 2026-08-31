@@ -10,6 +10,10 @@
 ![Nix](https://img.shields.io/badge/Nix-flake-7EBAE4?style=flat&logo=nixos&logoColor=white)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
 [![build](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/build.yml)
+[![debian](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-debian.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-debian.yml)
+[![ubuntu](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-ubuntu.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-ubuntu.yml)
+[![arch](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-arch.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-arch.yml)
+[![fedora](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-fedora.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-fedora.yml)
 
 </div>
 
@@ -116,11 +120,13 @@ cd hyprland-screen-shader
 sudo ./install.sh          # PREFIX=~/.local ./install.sh for a user install
 ```
 
-Nothing is built: the scripts and the effects are copied to `$PREFIX/share/screen-shader` and symlinked into `$PREFIX/bin`. They resolve their own location through the symlink, so the effects are found without any generated path
+Nothing is built: the scripts and the effects are copied to `$PREFIX/share/screen-shader` and symlinked into `$PREFIX/bin`. They resolve their own location through the symlink, so the effects are found without any generated path. Every file lands in an install manifest, and `./install.sh --uninstall` consumes it — exactly what was written comes out, nothing else
+
+The module's install-affecting options have matching flags: repeatable `--extra-shader FILE` copies an effect in beside the shipped ones, and `--rofi-prompt`/`--waybar-signal` replace a bin symlink with a two-line wrapper that exports the default — your own environment still wins, like Nix's `--set-default`. The flags are declarative: re-running without one undoes what it installed. Tab completion for the installer is in the checkout — `source completions/install.sh.bash` (or `.zsh`)
 
 Package recipes can stage the same layout without duplicating it: `DESTDIR="$pkgdir" PREFIX=/usr ./install.sh`
 
-Needs `bash`, `awk`, `sed`, `grep`, `flock`, `hyprctl`, and — for the picker — `rofi`. `notify-send` is optional; without it `rofi-shader` prints the messages to stderr instead
+Needs `bash`, `gawk`, `sed`, `grep`, `flock`, `pkill`, `hyprctl`, and — for the picker — `rofi`. `notify-send` is optional; without it `rofi-shader` prints the messages to stderr instead. Nothing is installed on your behalf: a failed preflight names what is missing and prints your distribution's own install command as a runnable `$` line
 
 Then bind the keys yourself, same block as above, plus the one line the Home Manager module would have written:
 
@@ -293,14 +299,18 @@ The indicator refreshes on `SIGRTMIN+N`, with `N` from `waybar.signal` — decla
 ## Tests
 
 ```sh
-tests/run.sh              # 69 assertions, no compositor needed
+tests/run.sh              # the behaviour suite, no compositor needed
 tests/run.sh --update     # re-record the golden shaders after a deliberate change
 tests/live.sh             # every effect through the real compositor, on your own screen
+tests/distro.sh debian    # real root install in a docker container: preflight → its own
+                          # printed guidance → install → suite → uninstall; also ubuntu, arch, fedora
 ```
 
 `hyprctl` and `notify-send` are stubbed, state goes to a scratch directory, and the generated GLSL is diffed against committed golden files — so a change in how shaders are assembled shows up as a diff rather than as a surprise on the next login. `nix flake check` runs the suite plus: every effect compiled with `glslangValidator` alone and all of them composed at once, the headers being complete and their `animated:` agreeing with what the compiler kept live, the packaged wrappers, and the Home Manager module evaluated against option stubs
 
 What none of that can see is the compositor's own verdict: Hyprland drops a shader it cannot compile and the slot reads back as set either way. `tests/live.sh` sets every effect on a running session, reads `decoration:screen_shader` back and watches the Hyprland log for a compile error — so it repaints your screen once per effect and puts your stack back afterwards. It needs a session, so it never runs in CI
+
+The distro suite runs in CI on every push to master and weekly against each distribution's `:latest` image — the badges above are its verdicts — but never on pull requests, so a flaky mirror cannot redden a change
 
 ## Layout
 

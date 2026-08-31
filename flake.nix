@@ -42,6 +42,10 @@
         name = "screen-shader-completions";
         path = ./completions;
       };
+      versionFile = builtins.path {
+        name = "screen-shader-VERSION";
+        path = ./VERSION;
+      };
     in
     {
       packages = forAllSystems (pkgs: rec {
@@ -85,6 +89,7 @@
                 cp ${manager} repo/screen-shader.sh
                 cp ${picker} repo/rofi-shader.sh
                 cp ${modi} repo/shader-modi.sh
+                cp ${versionFile} repo/VERSION
                 cp -r ${shaderDir} repo/shaders
                 cp -r ${testsDir} repo/tests
                 cp -r ${completionsDir} repo/completions
@@ -275,10 +280,18 @@
                 ];
               }
               ''
-                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${completionsDir}/screen-shader.bash
-                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${completionsDir}/screen-shader.bash
+                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${testsDir}/distro.sh ${testsDir}/check-completions.sh ${completionsDir}/screen-shader.bash ${completionsDir}/install.sh.bash
+                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${testsDir}/distro.sh ${testsDir}/check-completions.sh ${completionsDir}/screen-shader.bash ${completionsDir}/install.sh.bash
                 # zsh is not shellcheck's language; a parse is what can be checked
                 zsh -n ${completionsDir}/_screen-shader
+                zsh -n ${completionsDir}/install.sh.zsh
+
+                # install.sh and its completions must not drift apart
+                mkdir -p repo/tests
+                cp ${installer} repo/install.sh
+                cp -r ${completionsDir} repo/completions
+                cp ${testsDir}/check-completions.sh repo/tests/
+                bash repo/tests/check-completions.sh
                 touch $out
               '';
         }

@@ -22,6 +22,7 @@ _screen-shader() {
     'status:JSON for a waybar custom module'
     'menu:lines for the rofi picker'
     'help:usage'
+    '--version:print the version'
   )
 
   if ((CURRENT == 2)); then
