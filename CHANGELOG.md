@@ -4,6 +4,8 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-31
+
 ### Added
 
 - a `VERSION` file as the one place the version lives: `nix/package.nix` reads it, `screen-shader --version`/`-v` and `./install.sh --version`/`-v` print it, and CI refuses a release whose `CHANGELOG.md` has no heading for it
