@@ -15,11 +15,6 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 - a missing argument is reported in the tool's own words, such as `Usage: effect push <name>`, instead of bash's `line 610: 2: effect name required`
 - `install.sh` exits 2, not 1, on a usage error — an unknown flag, a flag missing its value, a relative `--prefix`, `--uninstall` beside a configuration flag, a `--waybar-signal` that is not a number, an `--extra-shader` that is not a `.frag` — and `--help` ends with an `Exit` sentence naming every code it can produce; a missing dependency or an unreadable `--extra-shader` file still exits 1
 
-### Fixed
-
-- tab completion for `screen-shader` works under the bash 3.2 a stock macOS ships: `completions/screen-shader.bash` collected its candidates with bash 4.0's `mapfile`, so TAB printed "mapfile: command not found" and offered nothing
-- tab completion for `./install.sh` works under the bash 3.2 a stock macOS ships: `completions/install.sh.bash` collected its candidates with bash 4.0's `mapfile`, so TAB printed "mapfile: command not found" and offered nothing
-
 ## [1.2.0] - 2026-08-31
 
 ### Added
