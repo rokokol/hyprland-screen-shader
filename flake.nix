@@ -46,6 +46,10 @@
         name = "screen-shader-VERSION";
         path = ./VERSION;
       };
+      checkSh = builtins.path {
+        name = "check-sh.sh";
+        path = ./check-sh.sh;
+      };
     in
     {
       packages = forAllSystems (pkgs: rec {
@@ -281,18 +285,20 @@
                 ];
               }
               ''
-                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${testsDir}/distro.sh ${testsDir}/check-completions.sh ${completionsDir}/screen-shader.bash ${completionsDir}/install.sh.bash
-                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${testsDir}/distro.sh ${testsDir}/check-completions.sh ${completionsDir}/screen-shader.bash ${completionsDir}/install.sh.bash
+                shellcheck ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${testsDir}/distro.sh ${checkSh} ${completionsDir}/screen-shader.bash ${completionsDir}/install.sh.bash
+                shfmt -d -i 2 -ci ${manager} ${picker} ${modi} ${installer} ${testsDir}/run.sh ${testsDir}/live.sh ${testsDir}/distro.sh ${checkSh} ${completionsDir}/screen-shader.bash ${completionsDir}/install.sh.bash
                 # zsh is not shellcheck's language; a parse is what can be checked
                 zsh -n ${completionsDir}/_screen-shader
                 zsh -n ${completionsDir}/install.sh.zsh
 
-                # install.sh and its completions must not drift apart
-                mkdir -p repo/tests
+                # install.sh, its help and its completions must not drift apart: check-sh.sh,
+                # vendored from the bash-best-practices skill, holds all three to the parser
+                mkdir -p repo
                 cp ${installer} repo/install.sh
+                cp ${versionFile} repo/VERSION
                 cp -r ${completionsDir} repo/completions
-                cp ${testsDir}/check-completions.sh repo/tests/
-                bash repo/tests/check-completions.sh
+                cp ${checkSh} repo/check-sh.sh
+                (cd repo && bash ./check-sh.sh -c completions/install.sh.bash completions/install.sh.zsh install.sh)
                 touch $out
               '';
         }

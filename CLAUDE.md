@@ -30,7 +30,8 @@ VERSION            the one place the version lives — package.nix, --version an
 shaders/*.frag     one effect per file
 completions/       the tool's completions plus install.sh's own, spelled by hand
 nix/               package.nix, module.nix, module-test.nix
-tests/             run.sh, live.sh, distro.sh, check-completions.sh, golden shaders
+tests/             run.sh, live.sh, distro.sh, golden shaders
+check-sh.sh        vendored from bash-best-practices, holds install.sh's help and completions to its parser
 ```
 
 ## Things that will bite
@@ -39,7 +40,7 @@ tests/             run.sh, live.sh, distro.sh, check-completions.sh, golden shad
 - **a shader that fails to compile is dropped silently.** The slot reads back as set either way, so the only witness is the Hyprland log — which is what `tests/live.sh` reads. `nix flake check` compiles every effect with `glslangValidator`, but that is the compiler's opinion, not the compositor's
 - **`rofi` and `hyprctl` are deliberately not `runtimeInputs`.** They come from the live session, so the package does not pin a compositor
 - **the picker is a script-modi, so it must stay off `PATH`.** rofi refuses to nest, which is why composing the picker into a rofi of your own takes `--modi`
-- **install.sh is declarative** — a run converges the prefix to exactly the flags given, every file lands in `share/screen-shader/install-manifest`, and `--uninstall` consumes it. The preflight's runnable guidance lines are printed as `  $ command` and `tests/distro.sh` executes exactly those lines — change the format and the distro suite goes blind. `tests/check-completions.sh` holds `completions/install.sh.*` to the installer's flags
+- **install.sh is declarative** — a run converges the prefix to exactly the flags given, every file lands in `share/screen-shader/install-manifest`, and `--uninstall` consumes it. The preflight's runnable guidance lines are printed as `  $ command` and `tests/distro.sh` executes exactly those lines — change the format and the distro suite goes blind. `check-sh.sh -c`, run by the flake's `scripts-lint`, holds `completions/install.sh.*` and the installer's `--help` to its flags and exit codes; it is a vendored copy, so a fix goes to the bash-best-practices skill and comes back through `vendor-sync.sh`, never as an edit here
 
 ## CHANGELOG
 
