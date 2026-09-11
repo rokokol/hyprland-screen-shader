@@ -1027,7 +1027,8 @@ case "$cmd" in
     usage >&2
     exit 2
     ;;
-  # One line, not the whole usage: stderr is what the UI layer turns into a popup, and
-  # "screen-shader help" is right there for the rest
-  *) die "Usage: screen-shader effect|bright|flash|add|remove|reset-all|restore|status|menu|help" ;;
+  # One line, not the whole usage: stderr is what the UI layer turns into a popup. It keeps
+  # no list of commands of its own, which nothing would hold to the dispatcher; it names
+  # the word it did not know and where the list is
+  *) die "Unknown command: $cmd — screen-shader help lists them" ;;
 esac
