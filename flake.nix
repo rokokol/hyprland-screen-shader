@@ -89,6 +89,7 @@
                 cp ${manager} repo/screen-shader.sh
                 cp ${picker} repo/rofi-shader.sh
                 cp ${modi} repo/shader-modi.sh
+                cp ${installer} repo/install.sh
                 cp ${versionFile} repo/VERSION
                 cp -r ${shaderDir} repo/shaders
                 cp -r ${testsDir} repo/tests

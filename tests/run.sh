@@ -521,6 +521,26 @@ for case in "grayscale" "crt" "wave" "crt grayscale sepia" "glitch crt vignette"
   fi
 done
 
+# ── the installer's refusals ─────────────────────────────────────────────────────
+section "installer"
+# A usage error is decided from the arguments alone, before the preflight and before a
+# single write, so it is safe to provoke here; PREFIX points into the scratch directory
+# all the same, in case a refusal ever stops happening
+installer_rc() {
+  PREFIX="$WORK/prefix" DESTDIR="" bash "$here/../install.sh" "$@" >/dev/null 2>&1
+  printf '%s' "$?"
+}
+is "an unknown flag is a usage error" 2 "$(installer_rc --no-such-flag)"
+is "a value flag without its value is a usage error" 2 "$(installer_rc --rofi-prompt)"
+is "a relative --prefix is a usage error" 2 "$(installer_rc --prefix relative/path)"
+is "--uninstall beside a configuration flag is a usage error" 2 \
+  "$(installer_rc --uninstall --rofi-prompt x)"
+is "a --waybar-signal that is not a number is a usage error" 2 "$(installer_rc --waybar-signal eight)"
+is "an --extra-shader that is not a .frag is a usage error" 2 \
+  "$(installer_rc --extra-shader "$here/../VERSION")"
+has "--help says which code a usage error gets" \
+  "$(bash "$here/../install.sh" --help)" "and 2 on a usage error."
+
 # ── completions ──────────────────────────────────────────────────────────────────
 section "completions"
 # The completion files spell the command list by hand; the dispatcher's usage line is the

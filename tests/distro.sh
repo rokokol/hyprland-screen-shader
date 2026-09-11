@@ -115,14 +115,16 @@ prefix=/usr/local
 bin_path="$prefix/bin/screen-shader"
 share_dir="$prefix/share/screen-shader"
 
-say "a relative PREFIX is rejected"
-! PREFIX=usr ./install.sh "${INSTALL_FLAGS[@]}" >/dev/null 2>&1 ||
-  die "install.sh accepted a relative PREFIX"
+say "a relative PREFIX is rejected as a usage error"
+rc=0
+PREFIX=usr ./install.sh "${INSTALL_FLAGS[@]}" >/dev/null 2>&1 || rc=$?
+((rc == 2)) || die "a relative PREFIX exited $rc, not the usage-error code 2"
 
 say "install, running the printed guidance when the preflight refuses"
 rc=0
 out=$(./install.sh "${INSTALL_FLAGS[@]}" 2>&1) || rc=$?
 if ((rc != 0)); then
+  ((rc == 1)) || die "the preflight exited $rc, not the missing-dependency code 1: $out"
   # The refusal must be complete and clean: name what is missing, write nothing
   printf '%s\n' "$out" | grep -q 'missing dependencies' ||
     die "the refusal did not say what is missing: $out"

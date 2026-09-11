@@ -51,31 +51,45 @@ Runtime environment (read by the installed scripts, not this script):
   ROFI_SHADER_PROMPT      picker prompt
   SCREEN_SHADER, SCREEN_SHADER_MODI, SCREEN_SHADER_UI
                           paths the three scripts use to find each other
+
+Exit 0 done, 1 when the install could not be made — a dependency missing, an
+--extra-shader file that cannot be read — and 2 on a usage error.
 EOF
+}
+
+die() { # the request itself is wrong
+  printf 'install.sh: %s\n' "$1" >&2
+  exit 2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix)
-      PREFIX="${2:?directory required}"
+      # Not ${2:?}: that exits 1 with bash's own message, and a usage error is 2
+      (($# >= 2)) || die "$1 needs a directory"
+      PREFIX="$2"
       shift 2
       ;;
     --destdir)
-      DESTDIR="${2:?directory required}"
+      (($# >= 2)) || die "$1 needs a directory"
+      DESTDIR="$2"
       shift 2
       ;;
     --extra-shader)
-      EXTRA_SHADERS+=("${2:?file required by $1}")
+      (($# >= 2)) || die "$1 needs a file"
+      EXTRA_SHADERS+=("$2")
       config_given="$1"
       shift 2
       ;;
     --rofi-prompt)
-      ROFI_PROMPT="${2:?value required by $1}"
+      (($# >= 2)) || die "$1 needs a prompt"
+      ROFI_PROMPT="$2"
       config_given="$1"
       shift 2
       ;;
     --waybar-signal)
-      WAYBAR_SIGNAL="${2:?value required by $1}"
+      (($# >= 2)) || die "$1 needs a signal number"
+      WAYBAR_SIGNAL="$2"
       config_given="$1"
       shift 2
       ;;
@@ -93,23 +107,23 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       usage >&2
-      exit 1
+      exit 2
       ;;
   esac
 done
 
-if [[ "$PREFIX" != /* ]]; then
-  echo "install.sh: PREFIX must be absolute: $PREFIX" >&2
-  exit 1
-fi
+# Everything decidable from the arguments alone is a usage error, and is refused before
+# the preflight so that a malformed request is never reported as a missing dependency
+[[ "$PREFIX" == /* ]] || die "PREFIX must be absolute: $PREFIX"
 if ((UNINSTALL)) && [[ -n "$config_given" ]]; then
-  echo "install.sh: --uninstall does not combine with $config_given" >&2
-  exit 1
+  die "--uninstall does not combine with $config_given"
 fi
 if [[ -n "$WAYBAR_SIGNAL" && ! "$WAYBAR_SIGNAL" =~ ^[0-9]+$ ]]; then
-  echo "install.sh: --waybar-signal takes a number: $WAYBAR_SIGNAL" >&2
-  exit 1
+  die "--waybar-signal takes a number: $WAYBAR_SIGNAL"
 fi
+for file in "${EXTRA_SHADERS[@]}"; do
+  [[ "$file" == *.frag ]] || die "--extra-shader wants a .frag file: $file"
+done
 
 root="${DESTDIR%/}$PREFIX"
 share_runtime="$PREFIX/share/screen-shader"
@@ -160,13 +174,11 @@ want hyprctl
 want rofi
 want notify-send
 
+# A well-formed request naming a file this machine cannot read: the install cannot be
+# made, which is 1, not a usage error
 for file in "${EXTRA_SHADERS[@]}"; do
   if [[ ! -r "$file" ]]; then
     echo "install.sh: --extra-shader file not readable: $file" >&2
-    exit 1
-  fi
-  if [[ "$file" != *.frag ]]; then
-    echo "install.sh: --extra-shader wants a .frag file: $file" >&2
     exit 1
   fi
 done
