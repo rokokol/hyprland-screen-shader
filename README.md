@@ -153,7 +153,7 @@ rofi-shader                                 # the picker
 rofi-shader <any of the above>              # …and the same, with a popup on what it said
 ```
 
-`flash` is for something else's use: it composites an effect over whatever is on for a second or so and puts it back, without touching durable state. `-k` makes it a no-op when the stack is already busy, so it never fights a deliberate choice
+`flash` is for something else's use: it composites an effect over whatever is on for a second or so and puts it back, without touching durable state. `-k` (`--keep`) makes it a no-op when the stack is already busy, so it never fights a deliberate choice
 
 The choice — the stack and the brightness — lives in `$XDG_STATE_HOME/screen-shader/state` and survives a reboot. Generated shaders are ephemeral, in `$XDG_RUNTIME_DIR/screen-shader`
 

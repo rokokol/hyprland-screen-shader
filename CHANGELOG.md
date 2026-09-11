@@ -4,8 +4,14 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ## [Unreleased]
 
+### Added
+
+- `screen-shader flash --keep`, the long form of `-k`
+
 ### Changed
 
+- `screen-shader` exits 2, not 1, on a usage error — an unknown command or flag, a missing effect name or value — and a bare `screen-shader` exits 2 with the help on stderr instead of 1 with a one-line hint; an unknown effect, a file that is not a shader or an effect already added still exits 1. A mistyped command still gets a one-line hint, because `rofi-shader` turns stderr into a popup, and `screen-shader help` ends with an `Exit` sentence naming every code
+- a missing argument is reported in the tool's own words, such as `Usage: effect push <name>`, instead of bash's `line 610: 2: effect name required`
 - `install.sh` exits 2, not 1, on a usage error — an unknown flag, a flag missing its value, a relative `--prefix`, `--uninstall` beside a configuration flag, a `--waybar-signal` that is not a number, an `--extra-shader` that is not a `.frag` — and `--help` ends with an `Exit` sentence naming every code it can produce; a missing dependency or an unreadable `--extra-shader` file still exits 1
 
 ### Fixed

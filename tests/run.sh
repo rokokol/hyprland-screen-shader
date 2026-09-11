@@ -521,6 +521,62 @@ for case in "grayscale" "crt" "wave" "crt grayscale sepia" "glitch crt vignette"
   fi
 done
 
+# ── the command line ─────────────────────────────────────────────────────────────
+section "command line"
+# 2 is a usage error, 1 the thing asked about being wrong: rofi-shader shows both as the
+# same popup, but a script calling the manager can tell them apart
+rc_of() {
+  run "$@" >/dev/null 2>&1
+  printf '%s' "$?"
+}
+is "a bare call is a usage error" 2 "$(rc_of)"
+has "and shows the help on stderr" "$(said)" "screen-shader effect push <name>"
+is "with nothing on stdout" "" "$(run 2>/dev/null)"
+is "an unknown command is a usage error" 2 "$(rc_of frobnicate)"
+# stderr becomes a popup, so the hint for a mistyped command stays one line
+is "and its hint is a single line" 1 "$(said frobnicate | wc -l | tr -d ' ')"
+has "which names where the rest is" "$(said frobnicate)" "help"
+is "effect without a subcommand is a usage error" 2 "$(rc_of effect)"
+is "effect push without a name is a usage error" 2 "$(rc_of effect push)"
+is "effect set without a name is a usage error" 2 "$(rc_of effect set)"
+is "effect toggle without a name is a usage error" 2 "$(rc_of effect toggle)"
+has "and it is said in the tool's words, not bash's" "$(said effect push)" "Usage: effect push <name>"
+is "an unknown bright subcommand is a usage error" 2 "$(rc_of bright sideways)"
+is "bright set without a value is a usage error" 2 "$(rc_of bright set)"
+is "flash without a name is a usage error" 2 "$(rc_of flash)"
+is "flash with an unknown flag is a usage error" 2 "$(rc_of flash --bogus glitch)"
+is "add without a file is a usage error" 2 "$(rc_of add)"
+is "add --name without a value is a usage error" 2 "$(rc_of add "$src/half.frag" --name)"
+is "add with an unknown flag is a usage error" 2 "$(rc_of add "$src/half.frag" --bogus)"
+is "remove without a name is a usage error" 2 "$(rc_of remove)"
+is "and so is rm, which is the same command" 2 "$(rc_of rm)"
+
+state "sepia" "1.00"
+run flash --keep glitch 0.1
+is "--keep is the long form of -k" 0 "$?"
+hasnt "and leaves the slot alone while the stack is busy" "$(cat "$CALLS")" "flash.frag"
+
+for word in help -h --help; do
+  is "$word exits 0" 0 "$(rc_of "$word")"
+done
+has "the help ends with the Exit sentence" "$(run help)" "and 2 on a usage error"
+
+# help, --version and the refusals are answered before the runtime directory and the
+# effect list are touched, so they work where neither exists yet; a working command
+# does not, which is what makes the first three assertions mean something
+bare="$WORK/bare"
+mkdir -p "$bare/shaders"
+without_setup() {
+  XDG_RUNTIME_DIR="$bare/rt" SCREEN_SHADER_DIR="$bare/shaders" \
+    SCREEN_SHADER_USER_DIR="$bare/shaders" "$SS" "$@" >/dev/null 2>&1
+  printf '%s' "$?"
+}
+is "help needs no effects" 0 "$(without_setup help)"
+is "--version needs no effects" 0 "$(without_setup --version)"
+is "an unknown command is refused without them too" 2 "$(without_setup frobnicate)"
+is "and none of that made the runtime directory" 1 "$([[ -e "$bare/rt" ]] && echo 0 || echo 1)"
+is "while a working command does need the effects" 1 "$(without_setup menu)"
+
 # ── the installer's refusals ─────────────────────────────────────────────────────
 section "installer"
 # A usage error is decided from the arguments alone, before the preflight and before a

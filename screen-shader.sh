@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-
+# The manager: a stack of full-screen effects and a brightness multiplier, composed into
+# the one shader slot Hyprland has. The help is the reference: screen-shader help.
+#
+# Nothing here reaches the network. Needs bash 4.4 (an empty array expanded under set -u,
+# besides declare -g and a negative subscript): tests/run.sh fails under bash:4.3 with
+# "stack[@]: unbound variable" and passes whole under bash:4.4.
 set -euo pipefail
 
 usage() {
@@ -7,36 +12,55 @@ usage() {
 screen-shader — Hyprland full-screen effects and software brightness
 
 Commands:
-  effect push <name>      ADD an effect to the stack (composited over the current ones)
-  effect set <name>       REPLACE the stack with a single effect
-  effect clear            clear the stack (turn all effects off)
-  effect toggle <name>    in the stack — remove it; not — add it
-  effect next|prev        replace the stack with the next/previous effect
-  bright up|down          soft brightness ±5% (clamp 10..200%)
-  bright reset            brightness 100%
-  bright toggle           100% ↔ 50%
-  bright set <0.10..2>    brightness exactly
-  bright get              current brightness in percent (integer, for the UI)
-  add <file.frag> [flags] install an effect into the writable directory
-                          --name <n>       effect name (default: the file name)
-                          --label/--emoji/--order <v>
-                          --animated  --samples  --raw   (--no-… for the opposite)
-                          -f/--force       replace one added earlier
-                          the flags are written as header lines on top of the file
-  remove <name>           drop an added effect (an installed one is not ours to delete)
-  flash [-k] <name> [sec] effect for N seconds (default 1.0), then revert;
-                          composited OVER the current stack (composition);
-                          durable state is not touched;
-                          -k — no-op if the stack is non-empty
-  restore                 re-read state and apply again
-                          (exec on every Hyprland reload — the slot is runtime)
-  reset-all               drop effects and brightness in one apply
-  status                  JSON for a waybar custom module
-  menu                    "<emoji> <label>|<name>" lines for the rofi picker
-                          (active ones marked with an apply number: 01. 02. 03.;
-                          a raw one with "raw."; suspended ones with "(01.)")
-  help                    this help
-  -v, --version           print the version
+  screen-shader effect push <name>      ADD an effect to the stack (composited over the
+                                        current ones)
+  screen-shader effect set <name>       REPLACE the stack with a single effect
+  screen-shader effect clear            clear the stack (turn all effects off)
+  screen-shader effect toggle <name>    in the stack — remove it; not — add it
+  screen-shader effect next|prev        replace the stack with the next/previous effect
+  screen-shader bright up|down          soft brightness ±5% (clamp 10..200%)
+  screen-shader bright reset            brightness 100%
+  screen-shader bright toggle           100% ↔ 50%
+  screen-shader bright set <0.10..2>    brightness exactly
+  screen-shader bright get              current brightness in percent (integer, for the UI)
+  screen-shader add <file.frag> [flags] install an effect into the writable directory;
+                                        the flags are written as header lines on top of
+                                        the file
+  screen-shader remove <name>           drop an added effect (an installed one is not
+                                        ours to delete); screen-shader rm is the same
+  screen-shader flash [-k] <name> [sec] effect for N seconds (default 1.0), then revert;
+                                        composited OVER the current stack; durable state
+                                        is not touched
+  screen-shader restore                 re-read state and apply again (exec on every
+                                        Hyprland reload — the slot is runtime)
+  screen-shader reset-all               drop effects and brightness in one apply
+  screen-shader status                  JSON for a waybar custom module
+  screen-shader menu                    "<emoji> <label>|<name>" lines for the rofi picker
+                                        (active ones marked with an apply number: 01. 02.
+                                        03.; a raw one with "raw."; suspended ones with
+                                        "(01.)")
+  screen-shader help                    this help
+
+  -h, --help            this help
+  -v, --version         print the version
+
+Flags of screen-shader add:
+
+  --name NAME           effect name (default: the file name)
+  --label TEXT          what the picker shows
+  --emoji TEXT          shown next to it, and in the waybar indicator
+  --order N             position in the menu and in effect next/prev
+  --animated            the picture changes over time
+  --samples             a pixel takes its colour from elsewhere on screen
+  --raw                 a standalone shader with its own main()
+  --no-animated, --no-samples, --no-raw
+                        say no, overriding what the file's own header declares
+  -f, --force           replace an effect added earlier
+
+Flags of screen-shader flash:
+
+  -k, --keep            do nothing when the stack is not empty, so a flash never
+                        fights a deliberate choice
 
 Effects STACK: every `effect push` adds a filter over the previous ones (the rofi
 picker sends `effect toggle`), and they compose into one shader until the stack is
@@ -76,6 +100,10 @@ Environment:
   SCREEN_SHADER_STATE  durable state file (default: $XDG_STATE_HOME/screen-shader/state)
   WAYBAR_SHADER_SIGNAL RT signal to poke waybar with after a change (unset = don't)
   SHADER_NO_SIGNAL     set to any value to suppress that signal
+
+Exit 0 done, 1 when the thing asked about is wrong — an unknown effect, a file that is
+not a shader, an effect already added — and 2 on a usage error: an unknown command or
+flag, or a missing name or value.
 EOF
 }
 
@@ -86,9 +114,14 @@ say() {
   printf '%s\n' "$*" >&2
 }
 
-die() {
+fail() { # the thing asked about is wrong: an unknown effect, a file that is not a shader
   say "$@"
   exit 1
+}
+
+die() { # the request itself is wrong: an unknown command or flag, a missing argument
+  say "$@"
+  exit 2
 }
 
 # SHADER_NO_SIGNAL suppresses the signal on restore at session start: the default
@@ -133,7 +166,7 @@ load_effects() {
     found["${name%.frag}"]="$f"
   done
   if [[ ${#found[@]} -eq 0 ]]; then
-    die "No .frag files in $SHADER_DIR"
+    fail "No .frag files in $SHADER_DIR"
   fi
   while IFS='|' read -r name emoji label anim samp raw file; do
     EFFECTS+=("$name")
@@ -171,6 +204,14 @@ load_effects() {
       END { flush() }
     ' "${found[@]}" | sort | cut -d'|' -f2-
   )
+}
+
+# What every working subcommand needs first: the runtime directory and the effect list.
+# Called from each cmd_*, never at the top level, so help, --version and a refusal are
+# answered on a machine with no effects and no runtime directory yet
+setup() {
+  mkdir -p "$RUNTIME_DIR"
+  load_effects
 }
 
 # Stack of active effects (in the order they were added). Empty = nothing applied
@@ -482,7 +523,7 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
   # Body list in chain order. An empty stack with bright<1 is a single passthrough
   local bodies=() e
   while IFS= read -r e; do
-    [[ -n "${FILE[$e]:-}" ]] || die "Shader not found: $e"
+    [[ -n "${FILE[$e]:-}" ]] || fail "Shader not found: $e"
     bodies+=("${FILE[$e]}")
   done < <(ordered_stack)
   # Also the belt for a stack that somehow emptied itself here: a shader without a body
@@ -502,7 +543,7 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
 # Check the name and that the file exists
 require_effect() {
   if [[ -z "${FILE[$1]:-}" ]]; then
-    die "Unknown effect: $1"
+    fail "Unknown effect: $1"
   fi
 }
 
@@ -605,11 +646,22 @@ clear_stack() {
 }
 
 cmd_effect() {
+  setup
   load_state
+  # Not ${2:?}: that exits 1 with bash's own message, and a missing name is a usage error
   case "${1:-}" in
-    push) push_effect "${2:?effect name required}" ;;
-    set) set_single "${2:?effect name required}" ;;
-    toggle | off-or) toggle_effect "${2:?effect name required}" ;;
+    push)
+      (($# >= 2)) || die "Usage: effect push <name>"
+      push_effect "$2"
+      ;;
+    set)
+      (($# >= 2)) || die "Usage: effect set <name>"
+      set_single "$2"
+      ;;
+    toggle | off-or)
+      (($# >= 2)) || die "Usage: effect $1 <name>"
+      toggle_effect "$2"
+      ;;
     clear | off | none) clear_stack ;;
     next | prev)
       local cur="none" idx step n
@@ -626,6 +678,7 @@ cmd_effect() {
 }
 
 cmd_bright() {
+  setup
   # flock -n: on fast scrolling waybar sends dozens of calls in parallel. A
   # blocking flock queues them → the queue piles up → a hang. Non-blocking: if
   # another instance is already running — exit silently, and the atomic write in
@@ -651,7 +704,10 @@ cmd_bright() {
     down) bright=$(awk -v b="$bright" -v s="$step" 'BEGIN{v=b-s; if(v<0.1)v=0.1; printf "%.2f", v}') ;;
     reset) bright="1.00" ;;
     toggle) if [[ "$bright" == "1.00" ]]; then bright="0.50"; else bright="1.00"; fi ;;
-    set) bright=$(awk -v b="${2:?value required}" 'BEGIN{v=b; if(v>2)v=2; if(v<0.1)v=0.1; printf "%.2f", v}') ;;
+    set)
+      (($# >= 2)) || die "Usage: bright set <0.10..2.00>"
+      bright=$(awk -v b="$2" 'BEGIN{v=b; if(v>2)v=2; if(v<0.1)v=0.1; printf "%.2f", v}')
+      ;;
     *)
       die "Usage: bright up|down|reset|toggle|set <0.10..2.00> | get"
       ;;
@@ -666,13 +722,21 @@ cmd_bright() {
 # guaranteed to differ, Hyprland re-reads the shader. Concurrent flashes are
 # suppressed by flock; -k — exit silently if the stack is non-empty
 cmd_flash() {
+  setup
   SHADER_NO_SIGNAL=1
   local keep=""
-  if [[ "${1:-}" == "-k" ]]; then
-    keep=1
-    shift
-  fi
-  local name="${1:?effect name required}" dur="${2:-1.0}"
+  while (($#)); do
+    case "$1" in
+      -k | --keep)
+        keep=1
+        shift
+        ;;
+      -*) die "Unknown flag: $1 · usage: flash [-k] <name> [sec]" ;;
+      *) break ;;
+    esac
+  done
+  (($# >= 1)) || die "Usage: flash [-k] <name> [sec]"
+  local name="$1" dur="${2:-1.0}"
   require_effect "$name"
 
   exec 9>"$RUNTIME_DIR/.flash.lock"
@@ -708,6 +772,7 @@ cmd_flash() {
 }
 
 cmd_restore() {
+  setup
   # Don't signal waybar at session start (see signal_waybar); the script exits
   # right away, so setting the flag globally is safe
   SHADER_NO_SIGNAL=1
@@ -717,6 +782,7 @@ cmd_restore() {
 
 # JSON for a waybar custom module: emojis of all stack effects + brightness percent
 cmd_status() {
+  setup
   load_state
   local pct emoji="" labels="" e class text tooltip
   pct=$(awk -v b="$bright" 'BEGIN{printf "%d", b * 100}')
@@ -753,6 +819,7 @@ cmd_status() {
 # with an apply number in the "01. " format (stack order = the order in which effects
 # were added), to see the accumulated composition and its order
 cmd_menu() {
+  setup
   load_state
   local e mark pos
   for e in "${EFFECTS[@]}"; do
@@ -775,16 +842,20 @@ cmd_menu() {
 # that knows nothing about this manager still lands with the header it needs, and one
 # that carries its own keeps whatever the flags do not override
 cmd_add() {
+  setup
   local src="" name="" force="" k
   local -A given=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --name)
-        name="${2:?--name needs a value}"
+        # Not ${2:?}: that exits 1 with bash's own message, and a usage error is 2
+        (($# >= 2)) || die "--name needs a value"
+        name="$2"
         shift 2
         ;;
       --label | --emoji | --order)
-        given["${1#--}"]="${2:?$1 needs a value}"
+        (($# >= 2)) || die "$1 needs a value"
+        given["${1#--}"]="$2"
         shift 2
         ;;
       --animated | --samples | --raw)
@@ -813,12 +884,12 @@ cmd_add() {
     die "Usage: add <file.frag> [--name n] [--label L] [--emoji E] [--order N] [--animated] [--samples] [--raw] [-f/--force]"
   }
   [[ -f "$src" ]] || {
-    die "No such file: $src"
+    fail "No such file: $src"
   }
 
   name="${name:-$(basename "$src" .frag)}"
   [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || {
-    die "Bad effect name: $name (letters, digits, - and _)"
+    fail "Bad effect name: $name (letters, digits, - and _)"
   }
 
   # The one time the GLSL is looked at: a mismatch here is worth catching now rather
@@ -833,20 +904,20 @@ cmd_add() {
   fi
   if [[ "$raw" == "yes" ]]; then
     grep -qE '(^|[^A-Za-z0-9_])main[[:space:]]*\(' "$src" || {
-      die "--raw expects a standalone shader with its own main(); $src has none"
+      fail "--raw expects a standalone shader with its own main(); $src has none"
     }
   else
     if grep -qE '(^|[^A-Za-z0-9_])main[[:space:]]*\(' "$src"; then
-      die "$src defines main(): add it with --raw, or rewrite it as vec3 effect(vec3 c, vec2 uv)"
+      fail "$src defines main(): add it with --raw, or rewrite it as vec3 effect(vec3 c, vec2 uv)"
     fi
     grep -qE 'vec3[[:space:]]+effect[[:space:]]*\(' "$src" || {
-      die "$src has no vec3 effect(vec3 c, vec2 uv) — that function is the entry point"
+      fail "$src has no vec3 effect(vec3 c, vec2 uv) — that function is the entry point"
     }
   fi
 
   local target="$USER_DIR/$name.frag"
   if [[ -e "$target" && -z "$force" ]]; then
-    die "Already added: $name — pass -f/--force to replace it"
+    fail "Already added: $name — pass -f/--force to replace it"
   fi
 
   mkdir -p "$USER_DIR"
@@ -875,13 +946,15 @@ cmd_add() {
 # Drop an added effect. Only the writable directory is ours to delete from — an
 # installed effect comes with the package, and removing its runtime copy just uncovers it
 cmd_remove() {
-  local name="${1:?effect name required}"
+  setup
+  (($# >= 1)) || die "Usage: remove <name>"
+  local name="$1"
   local target="$USER_DIR/$name.frag"
   if [[ ! -f "$target" ]]; then
     if [[ -n "${FILE[$name]:-}" ]]; then
-      die "$name comes with the package, it was not added at runtime"
+      fail "$name comes with the package, it was not added at runtime"
     fi
-    die "Unknown effect: $name"
+    fail "Unknown effect: $name"
   fi
   rm -f "$target"
 
@@ -910,6 +983,7 @@ cmd_remove() {
 # Full reset: effects + brightness in one apply (for waybar RMB). Nothing is kept, not
 # even the stack a raw effect had put aside — this is the way back to a bare screen
 cmd_reset_all() {
+  setup
   load_state
   stack=()
   bright="1.00"
@@ -919,54 +993,40 @@ cmd_reset_all() {
   say "Effects and brightness reset (★^O^★)"
 }
 
-case "${1:-}" in
-  help | -h | --help)
-    usage
-    exit 0
-    ;;
-  # VERSION sits beside the script (the repo root in a checkout, share/screen-shader
-  # under install.sh) or one prefix over (the Nix package wraps the script into bin
-  # while VERSION stays in share)
-  -v | --version)
-    for v in "$(dirname "$SELF")/VERSION" "$(dirname "$SELF")/../share/screen-shader/VERSION"; do
-      if [[ -f "$v" ]]; then
-        echo "screen-shader $(cat "$v")"
-        exit 0
-      fi
-    done
-    echo "screen-shader unknown"
-    exit 0
-    ;;
-esac
+# VERSION sits beside the script (the repo root in a checkout, share/screen-shader under
+# install.sh) or one prefix over (the Nix package wraps the script into bin while VERSION
+# stays in share)
+print_version() {
+  local v
+  for v in "$(dirname "$SELF")/VERSION" "$(dirname "$SELF")/../share/screen-shader/VERSION"; do
+    if [[ -f "$v" ]]; then
+      printf 'screen-shader %s\n' "$(cat "$v")"
+      return 0
+    fi
+  done
+  printf 'screen-shader unknown\n'
+}
 
-mkdir -p "$RUNTIME_DIR"
-load_effects
-
-case "${1:-}" in
-  effect)
-    shift
-    cmd_effect "$@"
+# Only the working arms reach setup(), inside their cmd_*: help, --version and both
+# refusals need no effects and no runtime directory, and answer without them
+cmd="${1:-}"
+(($# == 0)) || shift
+case "$cmd" in
+  effect) cmd_effect "$@" ;;
+  bright) cmd_bright "$@" ;;
+  flash) cmd_flash "$@" ;;
+  add) cmd_add "$@" ;;
+  remove | rm) cmd_remove "$@" ;;
+  restore) cmd_restore "$@" ;;
+  reset-all) cmd_reset_all "$@" ;;
+  status) cmd_status "$@" ;;
+  menu) cmd_menu "$@" ;;
+  -v | --version) print_version ;;
+  -h | --help | help) usage ;;
+  '')
+    usage >&2
+    exit 2
     ;;
-  bright)
-    shift
-    cmd_bright "$@"
-    ;;
-  flash)
-    shift
-    cmd_flash "$@"
-    ;;
-  add)
-    shift
-    cmd_add "$@"
-    ;;
-  remove | rm)
-    shift
-    cmd_remove "$@"
-    ;;
-  restore) cmd_restore ;;
-  reset-all) cmd_reset_all ;;
-  status) cmd_status ;;
-  menu) cmd_menu ;;
   # One line, not the whole usage: stderr is what the UI layer turns into a popup, and
   # "screen-shader help" is right there for the rest
   *) die "Usage: screen-shader effect|bright|flash|add|remove|reset-all|restore|status|menu|help" ;;
