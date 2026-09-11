@@ -2,7 +2,7 @@
 # Tab completion for screen-shader in bash. Hand-written on purpose and drift-checked by
 # machine: check-sh.sh -c, run by the flake's scripts-lint, holds every word here to the
 # manager's dispatcher and parsers. Builtins only, so it works without the bash-completion
-# package and under the bash 3.2 a stock macOS sources it with.
+# package.
 
 _screen_shader_names() {
   # Live names from the tool itself: menu prints "<emoji> <label>|<name>" lines
