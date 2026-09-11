@@ -1,7 +1,9 @@
 #compdef screen-shader
-# zsh completion for screen-shader. The command lists are spelled here by hand;
-# tests/run.sh checks them against the dispatcher's usage line, so a command added there
-# fails the suite until it lands here
+# Tab completion for screen-shader in zsh. Hand-written on purpose and drift-checked by
+# machine: check-sh.sh -c, run by the flake's scripts-lint, holds every word here to the
+# manager's dispatcher and parsers. The #compdef line binds it when the file sits on
+# $fpath as _screen-shader, and the last line calls the function, which is the autoload
+# convention.
 
 _screen_shader_names() {
   # Live names from the tool itself: menu prints "<emoji> <label>|<name>" lines
@@ -11,61 +13,84 @@ _screen_shader_names() {
 }
 
 _screen-shader() {
-  local -a commands=(
+  local -a subcommands
+  subcommands=(
     'effect:manage the effect stack'
     'bright:software brightness'
     'flash:apply an effect for N seconds, then revert'
     'add:install an effect from a .frag file'
     'remove:drop an added effect'
+    'rm:drop an added effect, the same as remove'
     'restore:re-read state and apply again'
     'reset-all:drop effects and brightness in one apply'
     'status:JSON for a waybar custom module'
     'menu:lines for the rofi picker'
     'help:usage'
+    '-v:print the version'
     '--version:print the version'
   )
-
-  if ((CURRENT == 2)); then
-    _describe -t commands 'screen-shader command' commands
-    return
-  fi
-
-  case "$words[2]" in
-    effect)
-      if ((CURRENT == 3)); then
-        local -a subcommands=(
-          'push:add an effect over the current stack'
-          'set:replace the stack with a single effect'
-          'clear:turn all effects off'
-          'toggle:add the effect, or remove it if stacked'
-          'next:replace the stack with the next effect'
-          'prev:replace the stack with the previous effect'
-        )
-        _describe -t commands 'effect command' subcommands
-      else
-        case "$words[3]" in
-          push | set | toggle) _screen_shader_names ;;
-        esac
-      fi
-      ;;
-    bright)
-      if ((CURRENT == 3)); then
-        local -a subcommands=(
-          'up:brightness +5%'
-          'down:brightness -5%'
-          'reset:brightness 100%'
-          'toggle:100% or 50%'
-          'set:brightness exactly (0.10..2)'
-          'get:current brightness in percent'
-        )
-        _describe -t commands 'bright command' subcommands
-      fi
-      ;;
-    flash | remove)
-      _screen_shader_names
-      ;;
-    add)
-      _files -g '*.frag'
+  _arguments -C \
+    '1:subcommand:->subcommand' \
+    '*::arguments:->arguments'
+  case "$state" in
+    subcommand) _describe 'subcommand' subcommands ;;
+    arguments)
+      case "${words[1]}" in
+        effect)
+          if ((CURRENT == 2)); then
+            local -a actions
+            actions=(
+              'push:add an effect over the current stack'
+              'set:replace the stack with a single effect'
+              'clear:turn all effects off'
+              'toggle:add the effect, or remove it if stacked'
+              'next:replace the stack with the next effect'
+              'prev:replace the stack with the previous effect'
+            )
+            _describe -t commands 'effect command' actions
+          else
+            case "${words[2]}" in
+              push | set | toggle) _screen_shader_names ;;
+            esac
+          fi
+          ;;
+        bright)
+          if ((CURRENT == 2)); then
+            local -a actions
+            actions=(
+              'up:brightness +5%'
+              'down:brightness -5%'
+              'reset:brightness 100%'
+              'toggle:100% or 50%'
+              'set:brightness exactly (0.10..2)'
+              'get:current brightness in percent'
+            )
+            _describe -t commands 'bright command' actions
+          fi
+          ;;
+        flash)
+          _arguments \
+            '(-k --keep)'{-k,--keep}'[do nothing when the stack is not empty]' \
+            '1:effect:_screen_shader_names' \
+            '2:seconds:'
+          ;;
+        remove | rm) _screen_shader_names ;;
+        add)
+          _arguments \
+            '--name[effect name]:name:' \
+            '--label[what the picker shows]:label:' \
+            '--emoji[shown next to it, and in the waybar indicator]:emoji:' \
+            '--order[position in the menu and in effect next/prev]:order:' \
+            '(--no-animated)--animated[the picture changes over time]' \
+            '(--animated)--no-animated[the picture does not change over time]' \
+            '(--no-samples)--samples[a pixel takes its colour from elsewhere on screen]' \
+            '(--samples)--no-samples[a pixel takes its colour only from itself]' \
+            '(--no-raw)--raw[a standalone shader with its own main()]' \
+            '(--raw)--no-raw[an effect body, not a standalone shader]' \
+            '(-f --force)'{-f,--force}'[replace an effect added earlier]' \
+            '1:effect source:_files -g "*.frag"'
+          ;;
+      esac
       ;;
   esac
 }

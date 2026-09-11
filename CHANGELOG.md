@@ -7,6 +7,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 ### Added
 
 - `screen-shader flash --keep`, the long form of `-k`
+- tab completion offers the flags of `screen-shader add` and of `flash`, the `rm` spelling of `remove`, and `-v`
 
 ### Changed
 
@@ -16,6 +17,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 ### Fixed
 
+- tab completion for `screen-shader` works under the bash 3.2 a stock macOS ships: `completions/screen-shader.bash` collected its candidates with bash 4.0's `mapfile`, so TAB printed "mapfile: command not found" and offered nothing
 - tab completion for `./install.sh` works under the bash 3.2 a stock macOS ships: `completions/install.sh.bash` collected its candidates with bash 4.0's `mapfile`, so TAB printed "mapfile: command not found" and offered nothing
 
 ## [1.2.0] - 2026-08-31

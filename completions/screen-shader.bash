@@ -1,45 +1,67 @@
 # shellcheck shell=bash
-# bash completion for screen-shader. The command lists are spelled here by hand;
-# tests/run.sh checks them against the dispatcher's usage line, so a command added there
-# fails the suite until it lands here
+# Tab completion for screen-shader in bash. Hand-written on purpose and drift-checked by
+# machine: check-sh.sh -c, run by the flake's scripts-lint, holds every word here to the
+# manager's dispatcher and parsers. Builtins only, so it works without the bash-completion
+# package and under the bash 3.2 a stock macOS sources it with.
+
 _screen_shader_names() {
   # Live names from the tool itself: menu prints "<emoji> <label>|<name>" lines
   screen-shader menu 2>/dev/null | cut -d'|' -f2
 }
 
 _screen_shader() {
-  local cur=${COMP_WORDS[COMP_CWORD]}
-  local cmd=${COMP_WORDS[1]-} sub=${COMP_WORDS[2]-}
-
+  local cur prev words="" word
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD - 1]}"
+  COMPREPLY=()
   if ((COMP_CWORD == 1)); then
-    mapfile -t COMPREPLY < <(compgen -W "effect bright flash add remove restore reset-all status menu help --version" -- "$cur")
-    return
+    words="effect bright flash add remove rm restore reset-all status menu help -v --version"
+  else
+    case "${COMP_WORDS[1]}" in
+      effect)
+        if ((COMP_CWORD == 2)); then
+          words="push set clear toggle next prev"
+        else
+          case "${COMP_WORDS[2]}" in
+            push | set | toggle) words="$(_screen_shader_names)" ;;
+          esac
+        fi
+        ;;
+      bright)
+        if ((COMP_CWORD == 2)); then
+          words="up down reset toggle set get"
+        fi
+        ;;
+      flash)
+        if [[ "$cur" == -* ]]; then
+          words="-k --keep"
+        else
+          words="$(_screen_shader_names)"
+        fi
+        ;;
+      remove | rm) words="$(_screen_shader_names)" ;;
+      add)
+        case "$prev" in
+          --name | --label | --emoji | --order) return ;;
+        esac
+        if [[ "$cur" == -* ]]; then
+          words="--name --label --emoji --order --animated --samples --raw"
+          words+=" --no-animated --no-samples --no-raw -f --force"
+        else
+          # Effect sources only; directories still complete so a path can be walked. A
+          # read loop, not mapfile: mapfile is bash 4.0
+          while IFS= read -r word; do
+            [[ -n "$word" ]] && COMPREPLY+=("$word")
+          done < <(compgen -f -X '!*.frag' -- "$cur")
+          compopt -o plusdirs 2>/dev/null || true
+          return
+        fi
+        ;;
+    esac
   fi
-
-  case "$cmd" in
-    effect)
-      if ((COMP_CWORD == 2)); then
-        mapfile -t COMPREPLY < <(compgen -W "push set clear toggle next prev" -- "$cur")
-      elif [[ $sub == push || $sub == set || $sub == toggle ]]; then
-        mapfile -t COMPREPLY < <(compgen -W "$(_screen_shader_names)" -- "$cur")
-      fi
-      ;;
-    bright)
-      if ((COMP_CWORD == 2)); then
-        mapfile -t COMPREPLY < <(compgen -W "up down reset toggle set get" -- "$cur")
-      fi
-      ;;
-    flash | remove)
-      mapfile -t COMPREPLY < <(compgen -W "$(_screen_shader_names)" -- "$cur")
-      ;;
-    add)
-      if ((COMP_CWORD == 2)); then
-        # Effect sources only; directories still complete so a path can be walked
-        mapfile -t COMPREPLY < <(compgen -f -X '!*.frag' -- "$cur")
-        compopt -o plusdirs 2>/dev/null || true
-      fi
-      ;;
-  esac
+  while IFS= read -r word; do
+    [[ -n "$word" ]] && COMPREPLY+=("$word")
+  done < <(compgen -W "$words" -- "$cur")
 }
 
 complete -F _screen_shader screen-shader

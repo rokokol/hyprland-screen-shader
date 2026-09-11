@@ -50,6 +50,12 @@
         name = "check-sh.sh";
         path = ./check-sh.sh;
       };
+      # Read by check-sh.sh in scripts-lint, which holds every `screen-shader SUB` it
+      # spells to the dispatcher; nothing else here rebuilds when it changes
+      readme = builtins.path {
+        name = "screen-shader-README.md";
+        path = ./README.md;
+      };
     in
     {
       packages = forAllSystems (pkgs: rec {
@@ -299,6 +305,13 @@
                 cp -r ${completionsDir} repo/completions
                 cp ${checkSh} repo/check-sh.sh
                 (cd repo && bash ./check-sh.sh -c completions/install.sh.bash completions/install.sh.zsh install.sh)
+
+                # So must the manager, its help, its completions and the README, which
+                # mentions some of its subcommands and sends the reader to the help for
+                # the rest: the same checker holds them all to the dispatcher, both ways
+                cp ${manager} repo/screen-shader.sh
+                cp ${readme} repo/README.md
+                (cd repo && bash ./check-sh.sh -n screen-shader -e SCREEN_SHADER_ -c completions/screen-shader.bash completions/_screen-shader -m README.md screen-shader.sh)
                 touch $out
               '';
         }
