@@ -1023,10 +1023,9 @@ case "$cmd" in
   menu) cmd_menu "$@" ;;
   -v | --version) print_version ;;
   -h | --help | help) usage ;;
-  '')
-    usage >&2
-    exit 2
-    ;;
+  # A bare call gets the same one line as a mistyped one, for the same popup; the whole
+  # help would fill the screen
+  '') die "No command — screen-shader help lists them" ;;
   # One line, not the whole usage: stderr is what the UI layer turns into a popup. It keeps
   # no list of commands of its own, which nothing would hold to the dispatcher; it names
   # the word it did not know and where the list is

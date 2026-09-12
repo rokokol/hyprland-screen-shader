@@ -530,7 +530,9 @@ rc_of() {
   printf '%s' "$?"
 }
 is "a bare call is a usage error" 2 "$(rc_of)"
-has "and shows the help on stderr" "$(said)" "screen-shader effect push <name>"
+# the same popup as a mistyped command, so the same one line rather than the whole help
+is "and its hint is a single line too" 1 "$(said | wc -l | tr -d ' ')"
+has "which names where the list is" "$(said)" "help"
 is "with nothing on stdout" "" "$(run 2>/dev/null)"
 is "an unknown command is a usage error" 2 "$(rc_of frobnicate)"
 # stderr becomes a popup, so the hint for a mistyped command stays one line
