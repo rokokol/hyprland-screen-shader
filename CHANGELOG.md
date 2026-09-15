@@ -14,6 +14,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 - `screen-shader` exits 2, not 1, on a usage error — an unknown command or flag, a missing effect name or value — and so does a bare `screen-shader`, where it exited 1; an unknown effect, a file that is not a shader or an effect already added still exits 1. A mistyped command still gets a one-line hint, because `rofi-shader` turns stderr into a popup; it names the unknown word and points at `screen-shader help` instead of keeping its own list of commands, and `screen-shader help` ends with an `Exit` sentence naming every code
 - a missing argument is reported in the tool's own words, such as `Usage: effect push <name>`, instead of bash's `line 610: 2: effect name required`
 - `install.sh` exits 2, not 1, on a usage error — an unknown flag, a flag missing its value, a relative `--prefix`, `--uninstall` beside a configuration flag, a `--waybar-signal` that is not a number, an `--extra-shader` that is not a `.frag` — and `--help` ends with an `Exit` sentence naming every code it can produce; a missing dependency or an unreadable `--extra-shader` file still exits 1
+- `screen-shader.sh`'s header comment keeps only the bash-floor rationale; what the manager does and that nothing here reaches the network now live in `--help`. `tests/run.sh -h|--help|help` now documents the suite
 
 ## [1.2.0] - 2026-08-31
 

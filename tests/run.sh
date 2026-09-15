@@ -2,13 +2,27 @@
 
 # Behaviour tests for screen-shader. Everything runs against a stub hyprctl in a
 # scratch runtime/state directory, so a live session is never touched
-#
-#   tests/run.sh              run the suite
-#   tests/run.sh --update     rewrite the golden shaders from the current output
-#
-# SCREEN_SHADER overrides which manager is exercised (default: the one next to tests/)
 
 set -uo pipefail
+
+usage() {
+  cat <<'EOF'
+tests/run.sh — the fast suite for screen-shader: drives it against a stub hyprctl in
+a scratch runtime/state directory
+
+  tests/run.sh              run the suite
+  tests/run.sh --update     rewrite the golden shaders from the current output
+
+SCREEN_SHADER overrides which manager is exercised (default: the one next to tests/)
+
+Nothing here reaches the network
+Exit: 0 all passed, 1 a check failed
+EOF
+}
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]] && {
+  usage
+  exit 0
+}
 
 here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 SS="${SCREEN_SHADER:-$here/../screen-shader.sh}"

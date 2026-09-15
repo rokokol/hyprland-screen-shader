@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# The manager: a stack of full-screen effects and a brightness multiplier, composed into
-# the one shader slot Hyprland has. The help is the reference: screen-shader help.
+# The help is the reference: screen-shader help
 #
-# Nothing here reaches the network. Needs bash 4.4 (an empty array expanded under set -u,
+# Needs bash 4.4 (an empty array expanded under set -u,
 # besides declare -g and a negative subscript): tests/run.sh fails under bash:4.3 with
-# "stack[@]: unbound variable" and passes whole under bash:4.4.
+# "stack[@]: unbound variable" and passes whole under bash:4.4
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
 screen-shader — Hyprland full-screen effects and software brightness
+
+The manager: a stack of full-screen effects and a brightness multiplier, composed into
+the one shader slot Hyprland has
+
+Nothing here reaches the network
 
 Commands:
   screen-shader effect push <name>      ADD an effect to the stack (composited over the
@@ -103,7 +107,7 @@ Environment:
 
 Exit 0 done, 1 when the thing asked about is wrong — an unknown effect, a file that is
 not a shader, an effect already added — and 2 on a usage error: an unknown command or
-flag, or a missing name or value.
+flag, or a missing name or value
 EOF
 }
 
