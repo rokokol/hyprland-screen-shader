@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-
-# Behaviour tests for screen-shader. Everything runs against a stub hyprctl in a
-# scratch runtime/state directory, so a live session is never touched
+# Isolation is four exported variables under one mktemp -d — XDG_RUNTIME_DIR,
+# SCREEN_SHADER_STATE, SCREEN_SHADER_USER_DIR, and CALLS and NOTIFY for what the stubs
+# record — so a case that spells a path instead of deriving it from $WORK is testing the
+# live session
 
 set -uo pipefail
 
