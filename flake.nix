@@ -308,10 +308,12 @@
 
                 # So must the manager, its help, its completions and the README, which
                 # mentions some of its subcommands and sends the reader to the help for
-                # the rest: the same checker holds them all to the dispatcher, both ways
+                # the rest: the same checker holds them all to the dispatcher, both ways. It
+                # proved itself on the call above, and the same copy under the same bash has
+                # nothing new to prove, so CHECK_SH_NESTED=1 runs the checks alone
                 cp ${manager} repo/screen-shader.sh
                 cp ${readme} repo/README.md
-                (cd repo && bash ./check-sh.sh -n screen-shader -e SCREEN_SHADER_ -c completions/screen-shader.bash completions/_screen-shader -m README.md screen-shader.sh)
+                (cd repo && CHECK_SH_NESTED=1 bash ./check-sh.sh -n screen-shader -e SCREEN_SHADER_ -c completions/screen-shader.bash completions/_screen-shader -m README.md screen-shader.sh)
                 touch $out
               '';
         }
