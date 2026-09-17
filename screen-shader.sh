@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The help is the reference: screen-shader help
 #
-# Needs bash 4.4 (an empty array expanded under set -u,
-# besides declare -g and a negative subscript): tests/run.sh fails under bash:4.3 with
-# "stack[@]: unbound variable" and passes whole under bash:4.4
+# Needs bash 4.4 (an empty array expanded under set -u, besides declare -g and a negative
+# subscript): tests/run.sh fails under bash:4.3 with "stack[@]: unbound variable" and
+# passes whole under bash:4.4
 set -euo pipefail
 
 usage() {
