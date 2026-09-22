@@ -18,7 +18,8 @@ BRIGHT_DOWN="__bright_down__"
 selected="${ROFI_INFO:-}"
 unset ROFI_RETV ROFI_INFO
 
-# Selection via the info value: brightness buttons adjust soft brightness; effects toggle in/out of the stack
+# Selection via the info value: a brightness button adjusts soft brightness, and an effect
+# toggles in or out of the stack
 # No exec — reprint the list so rofi stays open; "Normal" clears all, Escape closes
 if [[ -n "$selected" ]]; then
   case "$selected" in
