@@ -34,13 +34,15 @@ EOF
 # instead of pushing a queue of them into the feed
 notify() { # $1 = urgency, $2 = title, $3 = body
   local body="$3"
-  # mako and most other daemons parse the body as Pango markup, and ours carries effect
-  # labels and file paths — one stray & or < and the message never renders. Ampersand
-  # first, or the later escapes get escaped too; and \& in the replacement because a bare
-  # one means "whatever matched" since bash 5.2
-  body="${body//&/\&amp;}"
-  body="${body//</\&lt;}"
-  body="${body//>/\&gt;}"
+  # mako and most other daemons parse the body as Pango markup, and this body carries
+  # effect labels and file paths. One stray & or < and the message never renders.
+  # Ampersand first, or the later escapes get escaped too. The replacement is quoted
+  # because a bare & in it means "whatever matched" since bash 5.2. Quotes and not a
+  # backslash: tree-sitter's bash grammar rejects an escape here and then reads the
+  # whole file wrong. Both spellings turn a&b<c>d into a&amp;b&lt;c&gt;d
+  body="${body//"&"/"&amp;"}"
+  body="${body//"<"/"&lt;"}"
+  body="${body//">"/"&gt;"}"
   if command -v notify-send >/dev/null 2>&1; then
     notify-send -u "$1" -h string:x-canonical-private-synchronous:screen-shader "$2" "$body"
   else
@@ -50,8 +52,8 @@ notify() { # $1 = urgency, $2 = title, $3 = body
 
 # Somebody pointed rofi at this launcher. Opening a rofi from inside rofi is refused by
 # rofi itself, and being told so helps nobody — so step aside and let the modi answer, the
-# way rofi expected in the first place. Our own modi clears ROFI_RETV before calling back
-# here, so this never catches the passthrough below
+# way rofi expected in the first place. shader-modi.sh clears ROFI_RETV before it calls
+# back here, so this never catches the passthrough below
 if [[ -n "${ROFI_RETV:-}" ]]; then
   exec "$MODI" "$@"
 fi

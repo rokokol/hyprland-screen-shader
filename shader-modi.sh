@@ -42,9 +42,9 @@ printf '\0message\x1fFull-screen effect · brightness %s%%\n' "$("$UI" bright ge
 
 # Print the effects: visible label + hidden value (info). Active ones are marked with an
 # apply number (01. 02. …), a raw one with "raw." and the stack it displaced with
-# "(01.)" — see cmd_menu in screen-shader.sh. Right after
-# "Normal" (reset) we insert the soft-brightness buttons — different emojis
-# (🌕 brighter / 🌑 darker) for clarity; together with keep-selection it's handy to press in a row
+# "(01.)" — see cmd_menu in screen-shader.sh. The soft-brightness buttons go right after
+# "Normal" (reset), with different emojis (🌕 brighter / 🌑 darker) for clarity; together
+# with keep-selection they are handy to press in a row
 while IFS='|' read -r label value; do
   printf '%s\0info\x1f%s\n' "$label" "$value"
   if [[ "$value" == "none" ]]; then

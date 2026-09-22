@@ -221,10 +221,10 @@ setup() {
 # Stack of active effects (in the order they were added). Empty = nothing applied
 stack=()
 bright="1.00"
-# Hyprland does NOT recompile the shader if given the same path. So we write to
-# alternating files (active-0/active-1) — the path always changes and the shader is
-# guaranteed to be re-read (otherwise a brightness change with an active stack isn't
-# applied)
+# Hyprland does NOT recompile the shader if given the same path. The generated shader
+# therefore goes to alternating files (active-0/active-1), so the path always changes
+# and the shader is guaranteed to be re-read. Without that, a brightness change on top
+# of an active stack is never applied
 slot=0
 # A raw effect owns the frame alone, so taking the slot puts the composition aside
 # instead of destroying it — these hold it, and the brightness with it, until the raw
@@ -754,10 +754,10 @@ cmd_flash() {
     # Nothing to compose with — the raw shader is the whole frame for its second
     frag_body "${FILE[$name]}" >"$file"
   else
-    # The flash body first (usually samples the texture itself — glitch/wave); from
-    # the stack we take into the chain only color ones (not sampling the texture) —
-    # otherwise they'd overwrite the flash result (a proper composition of several
-    # geometries needs multi-pass rendering, and Hyprland has one slot)
+    # The flash body first (usually samples the texture itself — glitch/wave). Only the
+    # colour effects of the stack join the chain, the ones that do not sample the
+    # texture — otherwise they'd overwrite the flash result (a proper composition of
+    # several geometries needs multi-pass rendering, and Hyprland has one slot)
     local bodies=("${FILE[$name]}") e
     for e in "${stack[@]}"; do
       is_raw "$e" && continue
@@ -947,8 +947,8 @@ cmd_add() {
   printf '%s\n' "$target"
 }
 
-# Drop an added effect. Only the writable directory is ours to delete from — an
-# installed effect comes with the package, and removing its runtime copy just uncovers it
+# Drop an added effect. Only the writable directory can be deleted from — an installed
+# effect comes with the package, and removing its runtime copy just uncovers it
 cmd_remove() {
   setup
   (($# >= 1)) || die "Usage: remove <name>"
