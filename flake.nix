@@ -6,7 +6,7 @@
   outputs =
     { self, nixpkgs }:
     let
-      lib = nixpkgs.lib;
+      inherit (nixpkgs) lib;
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -257,7 +257,7 @@
             in
             pkgs.runCommand "module-wiring"
               {
-                nativeBuildInputs = [ pkgs.jq ];
+                nativeBuildInputs = with pkgs; [ jq ];
                 dump = builtins.toJSON wiring;
                 passAsFile = [ "dump" ];
               }
@@ -284,15 +284,15 @@
           scripts-lint =
             pkgs.runCommand "scripts-lint"
               {
-                nativeBuildInputs = [
+                nativeBuildInputs = with pkgs; [
                   # check-sh.sh below is moving to reading the script it is given as a tree,
                   # out of `shfmt --to-json`, with jq flattening that tree into rows. This
                   # sandbox has a scrubbed PATH, so the dev shell's jq is not reachable here
                   # and the tool has to be named on this derivation
-                  pkgs.jq
-                  pkgs.shellcheck
-                  pkgs.shfmt
-                  pkgs.zsh
+                  jq
+                  shellcheck
+                  shfmt
+                  zsh
                 ];
               }
               ''
