@@ -37,9 +37,10 @@ notify() { # $1 = urgency, $2 = title, $3 = body
   # mako and most other daemons parse the body as Pango markup, and this body carries
   # effect labels and file paths. One stray & or < and the message never renders.
   # Ampersand first, or the later escapes get escaped too. The replacement is quoted
-  # because a bare & in it means "whatever matched" since bash 5.2. Quotes and not a
-  # backslash: tree-sitter's bash grammar rejects an escape here and then reads the
-  # whole file wrong. Both spellings turn a&b<c>d into a&amp;b&lt;c&gt;d
+  # because a bare & in it means "whatever matched" since bash 5.2. Quoted and not
+  # escaped, because tree-sitter's bash grammar rejects an escape here and then reads
+  # the whole file wrong. Bash 5 only: 3.2 keeps the quotation marks, and this script
+  # runs under Hyprland
   body="${body//"&"/"&amp;"}"
   body="${body//"<"/"&lt;"}"
   body="${body//">"/"&gt;"}"
