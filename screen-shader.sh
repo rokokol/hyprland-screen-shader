@@ -38,8 +38,9 @@ Commands:
   screen-shader restore                 re-read state and apply again (exec on every
                                         Hyprland reload — the slot is runtime)
   screen-shader reset-all               drop effects and brightness in one apply
-  screen-shader status                  JSON for a waybar custom module
-  screen-shader menu                    "<emoji> <label>|<name>" lines for the rofi picker
+  screen-shader status [-i]             JSON for a waybar custom module; empty when nothing
+                                        is on, unless -i asks for the Normal effect's emoji
+  screen-shader menu                   "<emoji> <label>|<name>" lines for the rofi picker
                                         (active ones marked with an apply number: 01. 02.
                                         03.; a raw one with "raw."; suspended ones with
                                         "(01.)")
@@ -60,6 +61,11 @@ Flags of screen-shader add:
   --no-animated, --no-samples, --no-raw
                         say no, overriding what the file's own header declares
   -f, --force           replace an effect added earlier
+
+Flags of screen-shader status:
+
+  -i, --idle-icon       show the Normal effect's emoji (🌈) when nothing is on, so the
+                        module stays visible as something to click
 
 Flags of screen-shader flash:
 
@@ -787,6 +793,16 @@ cmd_restore() {
 # JSON for a waybar custom module: emojis of all stack effects + brightness percent
 cmd_status() {
   setup
+  local idle_icon=""
+  while (($#)); do
+    case "$1" in
+      -i | --idle-icon)
+        idle_icon=1
+        shift
+        ;;
+      *) die "Unknown flag: $1 · usage: status [-i]" ;;
+    esac
+  done
   load_state
   local pct emoji="" labels="" e class text tooltip
   pct=$(awk -v b="$bright" 'BEGIN{printf "%d", b * 100}')
@@ -798,8 +814,13 @@ cmd_status() {
   if [[ ${#stack[@]} -gt 1 ]]; then class="stack"; elif [[ ${#stack[@]} -eq 1 ]]; then class="${stack[0]}"; else class="dim"; fi
 
   if [[ ${#stack[@]} -eq 0 && "$bright" == "1.00" ]]; then
-    # Nothing active — the module hides (empty text)
-    printf '{"text":"","tooltip":"","class":"off"}\n'
+    # Nothing active — the module hides (empty text), or wears the Normal effect's
+    # emoji when the bar asked for a mark to click on
+    if [[ -n "$idle_icon" ]]; then
+      printf '{"text":"%s","tooltip":"%s","class":"off"}\n' "${EMOJI[none]:-🌈}" "${LABEL[none]:-Normal}"
+    else
+      printf '{"text":"","tooltip":"","class":"off"}\n'
+    fi
     return
   fi
 

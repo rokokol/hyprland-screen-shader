@@ -75,6 +75,10 @@ _screen-shader() {
             '2:seconds:'
           ;;
         remove | rm) _screen_shader_names ;;
+        status)
+          _arguments \
+            '(-i --idle-icon)'{-i,--idle-icon}"[show the Normal effect's emoji when nothing is on]"
+          ;;
         add)
           _arguments \
             '--name[effect name]:name:' \

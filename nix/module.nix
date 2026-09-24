@@ -89,6 +89,16 @@ in
         '';
       };
 
+      idleIcon = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Show the Normal effect's emoji (🌈) when no effect is on and brightness is
+          100%, instead of hiding the module. A bar used by a finger wants something
+          to press; a bar read by an eye is happier with nothing there
+        '';
+      };
+
       module = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         readOnly = true;
@@ -96,7 +106,7 @@ in
         # and go through the UI layer; scrolling does not, because the number moving
         # under the cursor is the answer
         default = {
-          exec = "${exe} status";
+          exec = "${exe} status${lib.optionalString cfg.waybar.idleIcon " --idle-icon"}";
           return-type = "json";
           format = "{}";
           on-click = picker;

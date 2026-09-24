@@ -171,8 +171,11 @@ is "the passthrough still works with ROFI_RETV in the environment" "85" \
 section "status"
 state "" "1.00"
 is "idle module is empty so waybar hides it" '{"text":"","tooltip":"","class":"off"}' "$(run status)"
+is "idle module shows the Normal emoji when asked" '{"text":"🌈","tooltip":"Normal","class":"off"}' "$(run status --idle-icon)"
+is "the short flag is the same" '{"text":"🌈","tooltip":"Normal","class":"off"}' "$(run status -i)"
 state "" "0.50"
 has "brightness alone still shows" "$(run status)" '"text":"🔅 50%"'
+has "brightness alone is unchanged by the idle icon" "$(run status --idle-icon)" '"text":"🔅 50%"'
 state "sepia" "1.00"
 has "one effect shows its emoji" "$(run status)" '"text":"🟤"'
 has "class is the effect name" "$(run status)" '"class":"sepia"'

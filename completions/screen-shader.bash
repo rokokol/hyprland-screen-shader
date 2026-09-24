@@ -40,6 +40,7 @@ _screen_shader() {
         fi
         ;;
       remove | rm) words="$(_screen_shader_names)" ;;
+      status) words="-i --idle-icon" ;;
       add)
         case "$prev" in
           --name | --label | --emoji | --order) return ;;

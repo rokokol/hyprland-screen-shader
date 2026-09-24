@@ -292,7 +292,7 @@ Get it wrong upwards and you spend redraws; downwards is what you actually notic
 programs.waybar.settings.mainBar.modules-right = [ "custom/shader" "clock" ];
 ```
 
-Left click opens the picker, right click resets everything, middle click halves the brightness, scroll adjusts it. The clicks go through `rofi-shader` and say what they did; scrolling goes straight to the manager and says nothing, because the number changing under the cursor is already the answer. The module hides itself when no effect is on and brightness is 100%
+Left click opens the picker, right click resets everything, middle click halves the brightness, scroll adjusts it. The clicks go through `rofi-shader` and say what they did; scrolling goes straight to the manager and says nothing, because the number changing under the cursor is already the answer. The module hides itself when no effect is on and brightness is 100%; `waybar.idleIcon = true` (`screen-shader status --idle-icon` by hand) shows the Normal effect's 🌈 there instead, which a touchscreen wants as something to press
 
 The indicator refreshes on `SIGRTMIN+N`, with `N` from `waybar.signal` — declared once and baked into the package, so the script and the bar cannot disagree. **The default action of an RT signal is to terminate the process**, so it must never be sent before waybar has installed its handler; `screen-shader restore` deliberately sends nothing for that reason, and at session start waybar reads `status` itself anyway
 

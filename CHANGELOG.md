@@ -2,6 +2,13 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioned by [semver](https://semver.org/spec/v2.0.0.html)
 
+## Unreleased
+
+### Added
+
+- `screen-shader status --idle-icon` (`-i`) prints the Normal effect's emoji with the `off` class when nothing is on, instead of an empty text; `waybar.idleIcon` in the Home Manager module puts the flag on the indicator, so the module stays on the bar as something to press
+- tab completion offers the flag of `screen-shader status`
+
 ## [1.3.0] - 2026-09-21
 
 ### Added
