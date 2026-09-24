@@ -130,14 +130,29 @@ in
 
       settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
-        default = {
-          # exec, not exec-once: the shader slot is runtime state and is lost on every
-          # reload. This is the one line the module still writes into your Hyprland
-          # config, because it is not a taste — without it an active effect quietly
-          # falls off. Keys are yours, see the README
-          exec = [ "${exe} restore" ];
-        };
-        defaultText = lib.literalExpression ''{ exec = [ "screen-shader restore" ]; }'';
+        # exec, not exec-once: the shader slot is runtime state and is lost on every
+        # reload. This is the one line the module still writes into your Hyprland config,
+        # because it is not a taste — without it an active effect quietly falls off. Keys
+        # are yours, see the README. A Lua config has no exec line; there the same call
+        # hangs on the start and the reload events
+        default =
+          if (config.wayland.windowManager.hyprland.configType or "hyprlang") == "lua" then
+            {
+              on = map (event: {
+                _args = [
+                  event
+                  (lib.generators.mkLuaInline ''
+                    function()
+                      hl.exec_cmd(${lib.generators.toLua { } "${exe} restore"})
+                    end'')
+                ];
+              }) [ "hyprland.start" "config.reloaded" ];
+            }
+          else
+            {
+              exec = [ "${exe} restore" ];
+            };
+        defaultText = lib.literalExpression ''{ exec = [ "screen-shader restore" ]; }, or the same as hl.on handlers under configType = "lua"'';
         description = ''
           Merged into `wayland.windowManager.hyprland.settings`. Set to `{ }` to write
           even that line yourself

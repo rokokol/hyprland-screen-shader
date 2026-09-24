@@ -8,6 +8,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), v
 
 - `screen-shader status --idle-icon` (`-i`) prints the Normal effect's emoji with the `off` class when nothing is on, instead of an empty text; `waybar.idleIcon` in the Home Manager module puts the flag on the indicator, so the module stays on the bar as something to press
 - tab completion offers the flag of `screen-shader status`
+- the manager runs under a Lua-config Hyprland, where `hyprctl keyword` no longer exists: it probes for `hyprctl eval` once per run and sets the shader slot and the render mode through `hl.config` there, through `keyword` on the release series as before; the Home Manager module writes its restore hook as `hl.on` handlers when `wayland.windowManager.hyprland.configType` is `"lua"`
 
 ## [1.3.0] - 2026-09-21
 

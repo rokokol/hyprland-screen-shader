@@ -126,7 +126,7 @@ The module's install-affecting options have matching flags: repeatable `--extra-
 
 Package recipes can stage the same layout without duplicating it: `DESTDIR="$pkgdir" PREFIX=/usr ./install.sh`
 
-Needs `bash`, `gawk`, `sed`, `grep`, `flock`, `pkill`, `hyprctl`, and — for the picker — `rofi`. `notify-send` is optional; without it `rofi-shader` prints the messages to stderr instead. Nothing is installed on your behalf: a failed preflight names what is missing and prints your distribution's own install command as a runnable `$` line
+Needs `bash`, `gawk`, `sed`, `grep`, `flock`, `pkill`, `hyprctl`, and — for the picker — `rofi`. Both Hyprland generations are spoken: the release series through `hyprctl keyword`, and the Lua-config one through `hyprctl eval`, told apart by one probe per run; the Home Manager module writes its restore hook as an `exec` line or as `hl.on` handlers by the same rule. `notify-send` is optional; without it `rofi-shader` prints the messages to stderr instead. Nothing is installed on your behalf: a failed preflight names what is missing and prints your distribution's own install command as a runnable `$` line
 
 Then bind the keys yourself, same block as above, plus the one line the Home Manager module would have written:
 

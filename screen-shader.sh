@@ -386,6 +386,41 @@ step_aside_for() { # $1 = the effect about to be added
   return 0
 }
 
+# Hyprland's Lua era took hyprctl keyword away and put hyprctl eval in its place; the
+# release series before it knows no eval. One probe per run says which door is open,
+# and the two setters below speak through it
+HYPR_MODE=""
+hypr_mode() {
+  if [[ -z "$HYPR_MODE" ]]; then
+    if [[ "$(hyprctl eval 'return true' 2>/dev/null)" == ok* ]]; then
+      HYPR_MODE=lua
+    else
+      HYPR_MODE=hyprlang
+    fi
+  fi
+  printf '%s' "$HYPR_MODE"
+}
+
+# set_screen_shader PATH — an empty path clears the slot
+set_screen_shader() {
+  case "$(hypr_mode)" in
+    lua) hyprctl eval "hl.config({ decoration = { screen_shader = \"$1\" } })" >/dev/null ;;
+    *) hyprctl keyword decoration:screen_shader "${1:-[[EMPTY]]}" >/dev/null ;;
+  esac
+}
+
+# set_damage_and_vfr DAMAGE VFR — VFR as 0 or 1, which the Lua era reads as a boolean
+set_damage_and_vfr() {
+  local vfr
+  case "$(hypr_mode)" in
+    lua)
+      if [[ "$2" == 1 ]]; then vfr=true; else vfr=false; fi
+      hyprctl eval "hl.config({ debug = { damage_tracking = $1, vfr = $vfr } })" >/dev/null
+      ;;
+    *) hyprctl --batch "keyword debug:damage_tracking $1 ; keyword debug:vfr $2" >/dev/null ;;
+  esac
+}
+
 # Render mode by the effect list: take the most demanding one
 #   animated   — one of them declared animation: damage 0 (draw every frame) + VFR off
 #                (with VFR on Hyprland goes idle and the animation stutters);
@@ -395,9 +430,9 @@ step_aside_for() { # $1 = the effect about to be added
 #   default    — only per-pixel effects: default damage 2 + VFR (partial ok)
 set_render_mode() {
   case "$1" in
-    animated) hyprctl --batch "keyword debug:damage_tracking 0 ; keyword debug:vfr 0" >/dev/null ;;
-    fullstatic) hyprctl --batch "keyword debug:damage_tracking 1 ; keyword debug:vfr 1" >/dev/null ;;
-    *) hyprctl --batch "keyword debug:damage_tracking 2 ; keyword debug:vfr 1" >/dev/null ;;
+    animated) set_damage_and_vfr 0 0 ;;
+    fullstatic) set_damage_and_vfr 1 1 ;;
+    *) set_damage_and_vfr 2 1 ;;
   esac
 }
 
@@ -509,7 +544,7 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
   # Fully remove the shader if there are neither effects nor dimming
   if [[ ${#stack[@]} -eq 0 && "$bright" == "1.00" ]]; then
     set_render_mode default
-    hyprctl keyword decoration:screen_shader "[[EMPTY]]" >/dev/null
+    set_screen_shader ""
     [[ "${1:-}" == "transient" ]] || save_state
     signal_waybar
     return
@@ -524,7 +559,7 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
     frag_body "${FILE[${stack[0]}]}" >"$tmp"
     mv -f "$tmp" "$ACTIVE"
     set_render_mode "$(render_mode_for "${stack[0]}")"
-    hyprctl keyword decoration:screen_shader "$ACTIVE" >/dev/null
+    set_screen_shader "$ACTIVE"
     [[ "${1:-}" == "transient" ]] || save_state
     signal_waybar
     return
@@ -545,7 +580,7 @@ apply() { # $1 (opt.) = transient: don't save state to durable state
   emit_shader "$ACTIVE" "${bodies[@]}"
 
   set_render_mode "$(render_mode_for "${stack[@]}")"
-  hyprctl keyword decoration:screen_shader "$ACTIVE" >/dev/null
+  set_screen_shader "$ACTIVE"
   [[ "${1:-}" == "transient" ]] || save_state
   signal_waybar
 }
@@ -775,7 +810,7 @@ cmd_flash() {
   # Render mode over the whole pair (flash + stack)
   set_render_mode "$(render_mode_for "$name" "${stack[@]}")"
 
-  hyprctl keyword decoration:screen_shader "$file" >/dev/null
+  set_screen_shader "$file"
   sleep "$dur"
   load_state
   apply

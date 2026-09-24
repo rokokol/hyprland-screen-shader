@@ -39,9 +39,13 @@ trap 'rm -rf "$WORK"' EXIT
 # window from a path that is only supposed to print the protocol
 mkdir -p "$WORK/bin"
 # /bin/sh, not env bash: the suite also runs inside a Nix sandbox, which has no /usr/bin
+# STUB_HYPR_LUA=1 impersonates a Lua-era Hyprland, whose hyprctl answers "ok" to eval;
+# without it the stub is the release series, where eval is an unknown request
 cat >"$WORK/bin/hyprctl" <<'EOF'
 #!/bin/sh
 printf 'hyprctl %s\n' "$*" >>"$CALLS"
+if [ "$1" = eval ] && [ -n "${STUB_HYPR_LUA:-}" ]; then printf 'ok\n'; fi
+exit 0
 EOF
 cat >"$WORK/bin/notify-send" <<'EOF'
 #!/bin/sh
@@ -279,6 +283,22 @@ run restore
 is "the most demanding effect in the stack decides" \
   "hyprctl --batch keyword debug:damage_tracking 0 ; keyword debug:vfr 0" \
   "$(grep -F 'damage_tracking' "$CALLS")"
+
+# ── the Lua era: hyprctl keyword is gone, hyprctl eval took its place ────────────
+export STUB_HYPR_LUA=1
+state "" "1.00"
+run restore
+has "under a Lua Hyprland the slot is emptied through hl.config" "$(cat "$CALLS")" \
+  'hyprctl eval hl.config({ decoration = { screen_shader = "" } })'
+state "wave"
+run restore
+is "and the render mode is one hl.config with a boolean vfr" \
+  'hyprctl eval hl.config({ debug = { damage_tracking = 0, vfr = false } })' \
+  "$(grep -F 'damage_tracking' "$CALLS")"
+has "the shader path is a quoted Lua string" "$(cat "$CALLS")" \
+  "hyprctl eval hl.config({ decoration = { screen_shader = \"$XDG_RUNTIME_DIR/screen-shader/active-"
+has "and no keyword is spoken there" "$(grep -c 'hyprctl keyword' "$CALLS")" "0"
+unset STUB_HYPR_LUA
 
 state "sepia" "0.90" 0
 run restore
