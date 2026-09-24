@@ -138,15 +138,21 @@ in
         default =
           if (config.wayland.windowManager.hyprland.configType or "hyprlang") == "lua" then
             {
-              on = map (event: {
-                _args = [
-                  event
-                  (lib.generators.mkLuaInline ''
-                    function()
-                      hl.exec_cmd(${lib.generators.toLua { } "${exe} restore"})
-                    end'')
-                ];
-              }) [ "hyprland.start" "config.reloaded" ];
+              on =
+                map
+                  (event: {
+                    _args = [
+                      event
+                      (lib.generators.mkLuaInline ''
+                        function()
+                          hl.exec_cmd(${lib.generators.toLua { } "${exe} restore"})
+                        end'')
+                    ];
+                  })
+                  [
+                    "hyprland.start"
+                    "config.reloaded"
+                  ];
             }
           else
             {
