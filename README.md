@@ -8,6 +8,7 @@
 ![GLSL](https://img.shields.io/badge/GLSL-ES_3.0-5586A4?style=flat&logo=opengl&logoColor=white)
 ![Bash](https://img.shields.io/badge/Bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
 ![Nix](https://img.shields.io/badge/Nix-flake-7EBAE4?style=flat&logo=nixos&logoColor=white)
+[![FlakeHub](https://img.shields.io/endpoint?url=https://flakehub.com/f/rokokol/hyprland-screen-shader/badge)](https://flakehub.com/flake/rokokol/hyprland-screen-shader)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
 [![build](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/build.yml)
 [![debian](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-debian.yml/badge.svg)](https://github.com/rokokol/hyprland-screen-shader/actions/workflows/distro-debian.yml)
